@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Kismet Web Interface{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- System Integration Status -->
+    {% if system_info and recommendations %}
+    <div class="col-12 mb-3">
+        {% set production_ready = system_info.systemd.available and system_info.privileges.can_manage_services and system_info.kismet.installed %}
+        <div class="alert alert-{% if production_ready %}success{% elif system_info.environment == 'development' %}info{% else %}warning{% endif %}" role="alert">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="alert-heading mb-1">
+                        <i data-feather="{% if production_ready %}check-circle{% elif system_info.environment == 'development' %}info{% else %}alert-triangle{% endif %}" class="me-2"></i>
+                        System Integration: {{ system_info.environment|title }} Environment
+                    </h6>
+                    <p class="mb-0">
+                        {% if production_ready %}
+                            Real system service integration active - all features available
+                        {% elif system_info.environment == 'development' %}
+                            Development mode - service management simulated for testing
+                        {% else %}
+                            Limited functionality - missing requirements for full integration
+                        {% endif %}
+                    </p>
+                </div>
+                <a href="{{ url_for('system_info') }}" class="btn btn-outline-{% if production_ready %}success{% elif system_info.environment == 'development' %}info{% else %}warning{% endif %}">
+                    <i data-feather="server" class="me-1"></i>
+                    Details
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Service Status Card -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i data-feather="activity" class="me-2"></i>
+                    Service Status
+                </h5>
+                <span class="badge bg-{% if service_status.status == 'running' %}success{% elif service_status.status == 'stopped' %}secondary{% else %}warning{% endif %}">
+                    {{ service_status.status|title }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-2">
+                            <strong>Status:</strong> 
+                            <span class="text-{% if service_status.status == 'running' %}success{% elif service_status.status == 'stopped' %}muted{% else %}warning{% endif %}">
+                                {{ service_status.status|title }}
+                            </span>
+                        </p>
+                        <p class="mb-2">
+                            <strong>Enabled:</strong> 
+                            <span class="text-{% if service_status.enabled %}success{% else %}muted{% endif %}">
+                                {{ 'Yes' if service_status.enabled else 'No' }}
+                            </span>
+                        </p>
+                        {% if service_status.pid %}
+                        <p class="mb-2">
+                            <strong>PID:</strong> {{ service_status.pid }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if service_status.uptime > 0 %}
+                        <p class="mb-2">
+                            <strong>Uptime:</strong> 
+                            {% set hours = (service_status.uptime // 3600) %}
+                            {% set minutes = ((service_status.uptime % 3600) // 60) %}
+                            {% set seconds = (service_status.uptime % 60) %}
+                            {{ "%02d:%02d:%02d"|format(hours, minutes, seconds) }}
+                        </p>
+                        {% endif %}
+                        {% if service_status.last_started %}
+                        <p class="mb-2">
+                            <strong>Last Started:</strong><br>
+                            <small class="text-muted">{{ service_status.last_started[:19] }}</small>
+                        </p>
+                        {% endif %}
+                        {% if service_status.last_stopped %}
+                        <p class="mb-2">
+                            <strong>Last Stopped:</strong><br>
+                            <small class="text-muted">{{ service_status.last_stopped[:19] }}</small>
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if service_status.status == 'running' %}
+                    <a href="{{ url_for('service_control', action='stop') }}" class="btn btn-outline-danger">
+                        <i data-feather="stop-circle" class="me-2"></i>
+                        Stop Service
+                    </a>
+                    <a href="{{ url_for('service_control', action='restart') }}" class="btn btn-outline-warning">
+                        <i data-feather="refresh-cw" class="me-2"></i>
+                        Restart Service
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('service_control', action='start') }}" class="btn btn-outline-success">
+                        <i data-feather="play-circle" class="me-2"></i>
+                        Start Service
+                    </a>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    {% if service_status.enabled %}
+                    <a href="{{ url_for('service_control', action='disable') }}" class="btn btn-outline-secondary">
+                        <i data-feather="x-circle" class="me-2"></i>
+                        Disable Auto-Start
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('service_control', action='enable') }}" class="btn btn-outline-info">
+                        <i data-feather="check-circle" class="me-2"></i>
+                        Enable Auto-Start
+                    </a>
+                    {% endif %}
+                    
+                    <hr class="my-3">
+                    
+                    <!-- System Control Buttons -->
+                    <button type="button" class="btn btn-warning" onclick="confirmSystemRestart()">
+                        <i data-feather="rotate-cw" class="me-2"></i>
+                        Restart Device
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="confirmSystemShutdown()">
+                        <i data-feather="power" class="me-2"></i>
+                        Shutdown Device
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Files Section -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i data-feather="file-text" class="me-2"></i>
+                    Recent Files
+                </h5>
+                <a href="{{ url_for('files') }}" class="btn btn-sm btn-outline-primary">
+                    <i data-feather="folder" class="me-1"></i>
+                    View All Files
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_files %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in recent_files %}
+                            <tr>
+                                <td>
+                                    <i data-feather="file" class="me-2"></i>
+                                    {{ file.name }}
+                                </td>
+                                <td>
+                                    {% if file.size < 1024 %}
+                                        {{ file.size }} B
+                                    {% elif file.size < 1048576 %}
+                                        {{ "%.1f"|format(file.size / 1024) }} KB
+                                    {% else %}
+                                        {{ "%.1f"|format(file.size / 1048576) }} MB
+                                    {% endif %}
+                                </td>
+                                <td>{{ file.modified }}</td>
+                                <td>
+                                    <a href="{{ url_for('download_file', filename=file.name) }}" class="btn btn-sm btn-outline-primary">
+                                        <i data-feather="download" class="me-1"></i>
+                                        Download
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i data-feather="inbox" class="mb-3" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                    <p class="text-muted">No files found. Start Kismet to begin capturing data.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Control Modal -->
+<div class="modal fade" id="systemControlModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="systemControlTitle">System Control</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="systemControlMessage"></p>
+                <div class="alert alert-warning">
+                    <i data-feather="alert-triangle" class="me-2"></i>
+                    <strong>Warning:</strong> This action will affect the entire device, not just the Kismet service.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn" id="systemControlConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmSystemRestart() {
+    const modal = new bootstrap.Modal(document.getElementById('systemControlModal'));
+    document.getElementById('systemControlTitle').textContent = 'Restart Device';
+    document.getElementById('systemControlMessage').textContent = 'Are you sure you want to restart the device? All running services will be stopped and restarted.';
+    
+    const confirmBtn = document.getElementById('systemControlConfirm');
+    confirmBtn.className = 'btn btn-warning';
+    confirmBtn.textContent = 'Restart Device';
+    confirmBtn.onclick = function() {
+        window.location.href = "{{ url_for('system_control', action='restart') }}";
+    };
+    
+    modal.show();
+}
+
+function confirmSystemShutdown() {
+    const modal = new bootstrap.Modal(document.getElementById('systemControlModal'));
+    document.getElementById('systemControlTitle').textContent = 'Shutdown Device';
+    document.getElementById('systemControlMessage').textContent = 'Are you sure you want to shutdown the device? You will need physical access to turn it back on.';
+    
+    const confirmBtn = document.getElementById('systemControlConfirm');
+    confirmBtn.className = 'btn btn-danger';
+    confirmBtn.textContent = 'Shutdown Device';
+    confirmBtn.onclick = function() {
+        window.location.href = "{{ url_for('system_control', action='shutdown') }}";
+    };
+    
+    modal.show();
+}
+
+// Initialize feather icons for modal content
+document.addEventListener('DOMContentLoaded', function() {
+    // Watch for modal shown event to replace icons
+    const modal = document.getElementById('systemControlModal');
+    if (modal) {
+        modal.addEventListener('shown.bs.modal', function () {
+            feather.replace();
+        });
+    }
+});
+</script>
+{% endblock %}
