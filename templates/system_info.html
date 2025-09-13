@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}System Information - Kismet Web Interface{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="server" class="me-2"></i>
+                    System Integration Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Environment Information -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Environment</h6>
+                        <p class="mb-1">
+                            <span class="badge bg-{% if system_info.environment == 'production' %}success{% elif system_info.environment == 'development' %}info{% else %}warning{% endif %}">
+                                {{ system_info.environment|title }}
+                            </span>
+                        </p>
+                        <small class="text-muted">
+                            {% if system_info.environment == 'production' %}
+                                Full system service integration available
+                            {% elif system_info.environment == 'development' %}
+                                Development mode - service management simulated
+                            {% else %}
+                                Mixed environment detected
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Production Ready</h6>
+                        {% set production_ready = system_info.systemd.available and system_info.privileges.can_manage_services and system_info.kismet.installed %}
+                        <p class="mb-1">
+                            <span class="badge bg-{% if production_ready %}success{% else %}warning{% endif %}">
+                                {% if production_ready %}Ready{% else %}Not Ready{% endif %}
+                            </span>
+                        </p>
+                        <small class="text-muted">
+                            {% if production_ready %}
+                                All requirements met for production deployment
+                            {% else %}
+                                Missing requirements for full functionality
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+
+                <!-- System Components -->
+                <div class="row">
+                    <!-- SystemD Status -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-{% if system_info.systemd.available %}success{% else %}warning{% endif %}">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="settings" class="me-2"></i>
+                                    SystemD Service Management
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Status:</strong>
+                                    <span class="badge bg-{% if system_info.systemd.available %}success{% else %}danger{% endif %} ms-2">
+                                        {% if system_info.systemd.available %}Available{% else %}Not Available{% endif %}
+                                    </span>
+                                </div>
+                                
+                                {% if system_info.systemd.available %}
+                                <div class="mb-2">
+                                    <strong>Path:</strong> <code>{{ system_info.systemd.path }}</code>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Version:</strong> {{ system_info.systemd.version }}
+                                </div>
+                                <div class="mb-2">
+                                    <strong>System Services:</strong>
+                                    <span class="badge bg-{% if system_info.systemd.system_services %}success{% else %}warning{% endif %}">
+                                        {% if system_info.systemd.system_services %}Accessible{% else %}No Access{% endif %}
+                                    </span>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>User Services:</strong>
+                                    <span class="badge bg-{% if system_info.systemd.user_services %}success{% else %}secondary{% endif %}">
+                                        {% if system_info.systemd.user_services %}Accessible{% else %}No Access{% endif %}
+                                    </span>
+                                </div>
+                                {% else %}
+                                <div class="text-muted">
+                                    <strong>Reason:</strong> {{ system_info.systemd.reason }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kismet Status -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-{% if system_info.kismet.installed %}success{% else %}warning{% endif %}">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="wifi" class="me-2"></i>
+                                    Kismet Installation
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Installed:</strong>
+                                    <span class="badge bg-{% if system_info.kismet.installed %}success{% else %}danger{% endif %} ms-2">
+                                        {% if system_info.kismet.installed %}Yes{% else %}No{% endif %}
+                                    </span>
+                                </div>
+                                
+                                {% if system_info.kismet.binary_available %}
+                                <div class="mb-2">
+                                    <strong>Binary:</strong> <code>{{ system_info.kismet.binary_path }}</code>
+                                </div>
+                                {% endif %}
+                                
+                                {% if system_info.kismet.server_available %}
+                                <div class="mb-2">
+                                    <strong>Server:</strong> <code>{{ system_info.kismet.server_path }}</code>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mb-2">
+                                    <strong>Service:</strong>
+                                    <span class="badge bg-{% if system_info.kismet.service_exists %}success{% else %}warning{% endif %}">
+                                        {% if system_info.kismet.service_exists %}Available{% else %}Not Found{% endif %}
+                                    </span>
+                                    {% if system_info.kismet.service_exists %}
+                                        <span class="badge bg-{% if system_info.kismet.service_status == 'active' %}success{% elif system_info.kismet.service_status == 'inactive' %}secondary{% else %}warning{% endif %} ms-1">
+                                            {{ system_info.kismet.service_status|title }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if system_info.kismet.config_files %}
+                                <div class="mb-2">
+                                    <strong>Config Files:</strong>
+                                    <ul class="mb-0 mt-1">
+                                        {% for config_file in system_info.kismet.config_files %}
+                                        <li><code>{{ config_file }}</code></li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Privileges Status -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-{% if system_info.privileges.can_manage_services %}success{% else %}warning{% endif %}">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="shield" class="me-2"></i>
+                                    User Privileges
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <strong>User ID:</strong> {{ system_info.privileges.user_id }}
+                                    {% if system_info.privileges.is_root %}
+                                        <span class="badge bg-danger ms-2">Root</span>
+                                    {% endif %}
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Sudo Available:</strong>
+                                    <span class="badge bg-{% if system_info.privileges.sudo_available %}success{% else %}warning{% endif %}">
+                                        {% if system_info.privileges.sudo_available %}Yes{% else %}No{% endif %}
+                                    </span>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Passwordless Sudo:</strong>
+                                    <span class="badge bg-{% if system_info.privileges.can_use_sudo %}success{% else %}warning{% endif %}">
+                                        {% if system_info.privileges.can_use_sudo %}Yes{% else %}No{% endif %}
+                                    </span>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>Service Management:</strong>
+                                    <span class="badge bg-{% if system_info.privileges.can_manage_services %}success{% else %}danger{% endif %}">
+                                        {% if system_info.privileges.can_manage_services %}Enabled{% else %}Disabled{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Network Capabilities -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card border-{% if system_info.network_info.capable %}success{% else %}info{% endif %}">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="radio" class="me-2"></i>
+                                    Network Capabilities
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong>Network Capable:</strong>
+                                    <span class="badge bg-{% if system_info.network_info.capable %}success{% else %}info{% endif %} ms-2">
+                                        {% if system_info.network_info.capable %}Yes{% else %}Limited{% endif %}
+                                    </span>
+                                </div>
+                                
+                                {% if system_info.network_info.bluetooth_count is defined and system_info.network_info.bluetooth_count > 0 %}
+                                <div class="mb-2">
+                                    <strong>Bluetooth Interfaces:</strong>
+                                    <span class="badge bg-info ms-2">{{ system_info.network_info.bluetooth_count }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if system_info.network_info.tools is defined %}
+                                <div class="mb-2">
+                                    <strong>Network Tools:</strong>
+                                    <div class="mt-1">
+                                        {% for tool, available in system_info.network_info.tools.items() %}
+                                        <span class="badge bg-{% if available %}success{% else %}secondary{% endif %} me-1">{{ tool }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations Section -->
+                {% if recommendations %}
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card border-warning">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="lightbulb" class="me-2"></i>
+                                    System Recommendations
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-warning">
+                                    <i data-feather="alert-triangle" class="me-2"></i>
+                                    <strong>Recommendations to improve system integration:</strong>
+                                </div>
+                                <ul class="mb-0">
+                                    {% for recommendation in recommendations %}
+                                    <li>{{ recommendation }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Device Detection Test -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="search" class="me-2"></i>
+                                    Device Detection Test
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">Test the device detection capabilities of this system.</p>
+                                <button type="button" class="btn btn-outline-info" onclick="testDeviceDetection()">
+                                    <i data-feather="search" class="me-1"></i>
+                                    Test Device Detection
+                                </button>
+                                <div id="device-test-results" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function testDeviceDetection() {
+    const resultsDiv = document.getElementById('device-test-results');
+    resultsDiv.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Testing device detection...</p>
+        </div>
+    `;
+    
+    DeviceDetection.detectAllDevices()
+        .then(devices => {
+            displayDeviceTestResults(devices, resultsDiv);
+        })
+        .catch(error => {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i data-feather="alert-circle" class="me-2"></i>
+                    Device detection test failed: ${error.message}
+                </div>
+            `;
+            feather.replace();
+        });
+}
+
+function displayDeviceTestResults(devices, container) {
+    let html = '<div class="alert alert-info"><h6>Device Detection Test Results:</h6>';
+    
+    // WiFi devices
+    if (devices.wifi && devices.wifi.length > 0) {
+        html += '<div class="mb-3"><strong><i data-feather="wifi" class="me-1"></i> WiFi Interfaces:</strong><ul class="mb-0 mt-1">';
+        devices.wifi.forEach(device => {
+            html += `<li><code>${device.interface}</code> - ${device.name || device.type}`;
+            if (device.mode) html += ` (Mode: ${device.mode})`;
+            if (device.frequency) html += ` (Freq: ${device.frequency})`;
+            html += '</li>';
+        });
+        html += '</ul></div>';
+    } else {
+        html += '<div class="mb-3"><strong><i data-feather="wifi" class="me-1"></i> WiFi Interfaces:</strong> <span class="text-muted">None detected</span></div>';
+    }
+    
+    // Bluetooth devices
+    if (devices.bluetooth && devices.bluetooth.length > 0) {
+        html += '<div class="mb-3"><strong><i data-feather="bluetooth" class="me-1"></i> Bluetooth Interfaces:</strong><ul class="mb-0 mt-1">';
+        devices.bluetooth.forEach(device => {
+            html += `<li><code>${device.interface}</code> - ${device.name || 'Bluetooth Device'}`;
+            if (device.address) html += ` (${device.address})`;
+            html += '</li>';
+        });
+        html += '</ul></div>';
+    } else {
+        html += '<div class="mb-3"><strong><i data-feather="bluetooth" class="me-1"></i> Bluetooth Interfaces:</strong> <span class="text-muted">None detected</span></div>';
+    }
+    
+    // SDR devices
+    if (devices.sdr && devices.sdr.length > 0) {
+        html += '<div class="mb-3"><strong><i data-feather="radio" class="me-1"></i> SDR Devices:</strong><ul class="mb-0 mt-1">';
+        devices.sdr.forEach(device => {
+            html += `<li><code>${device.device}</code> - ${device.name}`;
+            if (device.serial && device.serial !== '00000000') html += ` (SN: ${device.serial})`;
+            if (device.manufacturer) html += ` (${device.manufacturer})`;
+            html += '</li>';
+        });
+        html += '</ul></div>';
+    } else {
+        html += '<div class="mb-3"><strong><i data-feather="radio" class="me-1"></i> SDR Devices:</strong> <span class="text-muted">None detected</span></div>';
+    }
+    
+    const totalDevices = (devices.wifi?.length || 0) + (devices.bluetooth?.length || 0) + (devices.sdr?.length || 0);
+    
+    if (totalDevices === 0) {
+        html += '<div class="alert alert-warning mt-3"><i data-feather="alert-triangle" class="me-2"></i>No devices detected. This may be due to missing tools, permissions, or hardware.</div>';
+    } else {
+        html += `<div class="alert alert-success mt-3"><i data-feather="check-circle" class="me-2"></i>Successfully detected ${totalDevices} device(s) across all categories.</div>`;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+    feather.replace();
+}
+</script>
+{% endblock %}

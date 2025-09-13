@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}Remote Push - Kismet Web Interface{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i data-feather="upload-cloud" class="me-2"></i>
+                    Remote Data Push Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Configure remote data push services to send WiFi and Bluetooth data to a remote Kismet server. WiFi services include GPS data attachment, while Bluetooth services push raw data since Kismet doesn't attach GPS to Bluetooth by default.</p>
+                
+                <!-- Existing Services -->
+                {% if services %}
+                <div class="mb-4">
+                    <h6 class="text-primary">Active Push Services</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Type</th>
+                                    <th>Adapter</th>
+                                    <th>Sensor</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for service in services %}
+                                <tr>
+                                    <td class="font-monospace">{{ service.name }}</td>
+                                    <td>
+                                        {% if service.service_type == 'WiFi' %}
+                                            <span class="badge bg-info">
+                                                <i data-feather="wifi" class="me-1"></i>
+                                                WiFi + GPS
+                                            </span>
+                                        {% elif service.service_type == 'Bluetooth' %}
+                                            <span class="badge bg-primary">
+                                                <i data-feather="bluetooth" class="me-1"></i>
+                                                Bluetooth
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="font-monospace">{{ service.adapter }}</td>
+                                    <td>{{ service.sensor }}</td>
+                                    <td>
+                                        {% if service.status == 'active' %}
+                                            <span class="badge bg-success">Running</span>
+                                        {% elif service.status == 'inactive' %}
+                                            <span class="badge bg-secondary">Stopped</span>
+                                        {% elif service.status == 'failed' %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ service.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="start">
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Start">
+                                                    <i data-feather="play"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="stop">
+                                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Stop">
+                                                    <i data-feather="pause"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="restart">
+                                                <button type="submit" class="btn btn-sm btn-outline-info" title="Restart">
+                                                    <i data-feather="refresh-cw"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('remove_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove"
+                                                        onclick="return confirm('Remove this push service?')">
+                                                    <i data-feather="trash-2"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Add New Service -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="wifi" class="me-2"></i>
+                                    WiFi Push Service (with GPS)
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('create_wifi_push') }}">
+                                    <div class="mb-3">
+                                        <label for="wifi_kismet_ip" class="form-label">Remote Kismet Server IP</label>
+                                        <input type="text" class="form-control" name="kismet_ip" id="wifi_kismet_ip" 
+                                               placeholder="192.168.1.100" required>
+                                        <div class="form-text">IP address of the remote Kismet server</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="wifi_api_key" class="form-label">Data API Key</label>
+                                        <input type="text" class="form-control" name="api_key" id="wifi_api_key" 
+                                               placeholder="your-api-key" required>
+                                        <div class="form-text">API key for data push (requires datasource permissions)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="wifi_gps_api_key" class="form-label">GPS API Key</label>
+                                        <input type="text" class="form-control" name="gps_api_key" id="wifi_gps_api_key" 
+                                               placeholder="your-gps-api-key" required>
+                                        <div class="form-text">API key for GPS data (requires WEBGPS permissions)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="wifi_adapter" class="form-label">WiFi Adapter</label>
+                                        <div class="input-group">
+                                            <select class="form-select" id="wifi_adapter_select">
+                                                <option value="">Select adapter...</option>
+                                            </select>
+                                            <input type="text" class="form-control" name="wifi_adapter" id="wifi_adapter" 
+                                                   placeholder="wlan0" required style="display: none;">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="toggleWifiAdapterInput()">
+                                                <i data-feather="edit-2"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">WiFi interface name (e.g., wlan0, wlan1)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="wifi_sensor" class="form-label">Sensor Name</label>
+                                        <input type="text" class="form-control" name="wifi_sensor" id="wifi_sensor" 
+                                               placeholder="wifi-sensor-01" required>
+                                        <div class="form-text">Unique name for this sensor</div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-primary">
+                                        <i data-feather="plus" class="me-2"></i>
+                                        Create WiFi Push Service
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="bluetooth" class="me-2"></i>
+                                    Bluetooth Push Service
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('create_bluetooth_push') }}">
+                                    <div class="mb-3">
+                                        <label for="bt_kismet_ip" class="form-label">Remote Kismet Server IP</label>
+                                        <input type="text" class="form-control" name="kismet_ip" id="bt_kismet_ip" 
+                                               placeholder="192.168.1.100" required>
+                                        <div class="form-text">IP address of the remote Kismet server</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="bt_api_key" class="form-label">API Key</label>
+                                        <input type="text" class="form-control" name="api_key" id="bt_api_key" 
+                                               placeholder="your-api-key" required>
+                                        <div class="form-text">API key for data push (requires datasource permissions)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="bt_device" class="form-label">Bluetooth Device</label>
+                                        <div class="input-group">
+                                            <select class="form-select" id="bt_device_select">
+                                                <option value="">Select device...</option>
+                                            </select>
+                                            <input type="text" class="form-control" name="bt_device" id="bt_device" 
+                                                   placeholder="hci0" required style="display: none;">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="toggleBtDeviceInput()">
+                                                <i data-feather="edit-2"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">Bluetooth interface name (e.g., hci0, hci1)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="bt_sensor" class="form-label">Sensor Name</label>
+                                        <input type="text" class="form-control" name="bt_sensor" id="bt_sensor" 
+                                               placeholder="bluetooth-sensor-01" required>
+                                        <div class="form-text">Unique name for this sensor</div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-primary">
+                                        <i data-feather="plus" class="me-2"></i>
+                                        Create Bluetooth Push Service
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Device Detection Section -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="search" class="me-2"></i>
+                                    Device Detection
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">Automatically detect available WiFi and Bluetooth interfaces for push services.</p>
+                                <button type="button" class="btn btn-outline-info" onclick="detectPushDevices()">
+                                    <i data-feather="search" class="me-1"></i>
+                                    Detect Available Devices
+                                </button>
+                                <div id="push-device-results" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleWifiAdapterInput() {
+    const select = document.getElementById('wifi_adapter_select');
+    const input = document.getElementById('wifi_adapter');
+    
+    if (select.style.display === 'none') {
+        select.style.display = 'block';
+        input.style.display = 'none';
+        input.value = select.value;
+    } else {
+        select.style.display = 'none';
+        input.style.display = 'block';
+        input.focus();
+    }
+}
+
+function toggleBtDeviceInput() {
+    const select = document.getElementById('bt_device_select');
+    const input = document.getElementById('bt_device');
+    
+    if (select.style.display === 'none') {
+        select.style.display = 'block';
+        input.style.display = 'none';
+        input.value = select.value;
+    } else {
+        select.style.display = 'none';
+        input.style.display = 'block';
+        input.focus();
+    }
+}
+
+function detectPushDevices() {
+    const resultsDiv = document.getElementById('push-device-results');
+    resultsDiv.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <span class="ms-2">Detecting devices...</span>
+        </div>
+    `;
+    
+    DeviceDetection.detectAllDevices()
+        .then(devices => {
+            updatePushDeviceSelects(devices);
+            displayPushDetectionResults(devices, resultsDiv);
+        })
+        .catch(error => {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i data-feather="alert-circle" class="me-2"></i>
+                    Detection failed: ${error.message}
+                </div>
+            `;
+            feather.replace();
+        });
+}
+
+function updatePushDeviceSelects(devices) {
+    // Update WiFi adapter select
+    const wifiSelect = document.getElementById('wifi_adapter_select');
+    wifiSelect.innerHTML = '<option value="">Select adapter...</option>';
+    if (devices.wifi) {
+        devices.wifi.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.interface;
+            option.textContent = `${device.interface} - ${device.name || device.type}`;
+            wifiSelect.appendChild(option);
+        });
+    }
+    
+    // Update Bluetooth device select
+    const btSelect = document.getElementById('bt_device_select');
+    btSelect.innerHTML = '<option value="">Select device...</option>';
+    if (devices.bluetooth) {
+        devices.bluetooth.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.interface;
+            option.textContent = `${device.interface} - ${device.name || 'Bluetooth Device'}`;
+            btSelect.appendChild(option);
+        });
+    }
+    
+    // Set up change handlers
+    wifiSelect.onchange = function() {
+        document.getElementById('wifi_adapter').value = this.value;
+    };
+    
+    btSelect.onchange = function() {
+        document.getElementById('bt_device').value = this.value;
+    };
+}
+
+function displayPushDetectionResults(devices, container) {
+    let html = '<div class="alert alert-info"><h6>Detection Results:</h6>';
+    
+    if (devices.wifi && devices.wifi.length > 0) {
+        html += '<strong>WiFi Interfaces:</strong><ul class="mb-2">';
+        devices.wifi.forEach(device => {
+            html += `<li>${device.interface} (${device.type})</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if (devices.bluetooth && devices.bluetooth.length > 0) {
+        html += '<strong>Bluetooth Interfaces:</strong><ul class="mb-2">';
+        devices.bluetooth.forEach(device => {
+            html += `<li>${device.interface} (${device.address || 'N/A'})</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if ((!devices.wifi || devices.wifi.length === 0) && 
+        (!devices.bluetooth || devices.bluetooth.length === 0)) {
+        html += '<strong>No devices detected</strong>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Initialize device detection on page load
+document.addEventListener('DOMContentLoaded', function() {
+    detectPushDevices();
+});
+</script>
+{% endblock %}

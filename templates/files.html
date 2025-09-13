@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Files - Kismet Web Interface{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i data-feather="folder" class="me-2"></i>
+          Kismet Files
+        </h5>
+        <div>
+          <button class="btn btn-outline-secondary" onclick="refreshFiles()">
+            <i data-feather="refresh-cw" class="me-1"></i>
+            Refresh
+          </button>
+          <form method="POST" action="{{ url_for('vacuum_logs') }}" class="d-inline">
+            <button type="submit" class="btn btn-outline-warning"
+                    onclick="return confirm('Create a zip archive of all files in the logs directory?')">
+              <i data-feather="archive" class="me-1"></i>
+              Vacuum & Archive
+            </button>
+          </form>
+          <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteAllModal">
+            <i data-feather="trash-2" class="me-1"></i>
+            Delete All Files
+          </button>
+          <a href="{{ url_for('config') }}" class="btn btn-outline-primary">
+            <i data-feather="settings" class="me-1"></i>
+            Configuration
+          </a>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Directory Display -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Log Directory</label>
+            <input type="text" class="form-control" value="{{ current_directory or default_directory }}" readonly>
+          </div>
+        </div>
+
+        {% if files %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th><i data-feather="file" class="me-1"></i> Filename</th>
+                <th><i data-feather="hard-drive" class="me-1"></i> Size</th>
+                <th><i data-feather="calendar" class="me-1"></i> Modified</th>
+                <th><i data-feather="folder" class="me-1"></i> Location</th>
+                <th><i data-feather="download" class="me-1"></i> Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for file in files %}
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center">
+                    {% if file.name.endswith('.pcapppi') or file.name.endswith('.pcapng') %}
+                      <i data-feather="wifi" class="me-2 text-info" aria-label="Capture file"></i>
+                    {% elif file.name.endswith('.kismet') or file.name.endswith('.kismet-journal') %}
+                      <i data-feather="database" class="me-2 text-warning" aria-label="Kismet log"></i>
+                    {% elif file.name.endswith('.kml') %}
+                      <i data-feather="map" class="me-2 text-success" aria-label="KML file"></i>
+                    {% elif file.name.endswith('.wiglecsv') %}
+                      <i data-feather="file-text" class="me-2 text-secondary" aria-label="Wigle CSV"></i>
+                    {% else %}
+                      <i data-feather="file" class="me-2" aria-label="File"></i>
+                    {% endif %}
+                    <span class="font-monospace">{{ file.name }}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-secondary">
+                    {% if file.size < 1024 %}
+                      {{ file.size }} B
+                    {% elif file.size < 1048576 %}
+                      {{ "%.1f"|format(file.size / 1024) }} KB
+                    {% elif file.size < 1073741824 %}
+                      {{ "%.1f"|format(file.size / 1048576) }} MB
+                    {% else %}
+                      {{ "%.2f"|format(file.size / 1073741824) }} GB
+                    {% endif %}
+                  </span>
+                </td>
+                <td><small class="text-muted">{{ file.modified }}</small></td>
+                <td>
+                  {% if file.source %}
+                  <span class="badge {% if file.source == 'User Directory' %}bg-primary{% elif file.source == 'System Directory' %}bg-success{% elif file.source == 'Temp Directory' %}bg-warning{% else %}bg-secondary{% endif %}">
+                    {{ file.source }}
+                  </span>
+                  <br><small class="text-muted font-monospace">{{ file.directory }}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('download_file', filename=file.name) }}"
+                       class="btn btn-sm btn-outline-primary" title="Download file">
+                      <i data-feather="download" class="me-1"></i>
+                      Download
+                    </a>
+                    {% if file.name.endswith('.kismet') %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-success"
+                            onclick="convertToKML('{{ file.name }}', '{{ file.directory }}')"
+                            title="Convert to KML">
+                      <i data-feather="map" class="me-1"></i>
+                      To KML
+                    </button>
+                    {% endif %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-info"
+                            onclick="showFileInfo('{{ file.name }}', '{{ file.size }}', '{{ file.modified }}')"
+                            title="File information">
+                      <i data-feather="info"></i>
+                    </button>
+                    <form method="POST" action="{{ url_for('delete_file') }}"
+                          onsubmit="return confirm('Delete {{ file.name }}? This cannot be undone.');"
+                          style="margin:0;">
+                      <input type="hidden" name="filename" value="{{ file.name }}">
+                      <input type="hidden" name="directory" value="{{ file.directory }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                        <i data-feather="trash-2"></i>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- File Statistics -->
+        <div class="row mt-4">
+          <div class="col-md-2">
+            <div class="text-center">
+              <div class="h4 text-primary">{{ files|length }}</div>
+              <div class="text-muted">Total Files</div>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-center">
+              <div class="h4 text-info">
+                {% set total_size = files|sum(attribute='size') %}
+                {% if total_size < 1048576 %}
+                  {{ "%.1f"|format(total_size / 1024) }} KB
+                {% elif total_size < 1073741824 %}
+                  {{ "%.1f"|format(total_size / 1048576) }} MB
+                {% else %}
+                  {{ "%.2f"|format(total_size / 1073741824) }} GB
+                {% endif %}
+              </div>
+              <div class="text-muted">Total Size</div>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-center">
+              {% set capture_files = [] %}
+              {% for file in files %}
+                {% if file.name.endswith('.pcapppi') or file.name.endswith('.pcapng') %}
+                  {% set _ = capture_files.append(file) %}
+                {% endif %}
+              {% endfor %}
+              <div class="h4 text-success">{{ capture_files|length }}</div>
+              <div class="text-muted">Capture Files</div>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-center">
+              {% set log_files = [] %}
+              {% for file in files %}
+                {% if file.name.endswith('.kismet') or file.name.endswith('.kismet-journal') or file.name.endswith('.wiglecsv') %}
+                  {% set _ = log_files.append(file) %}
+                {% endif %}
+              {% endfor %}
+              <div class="h4 text-warning">{{ log_files|length }}</div>
+              <div class="text-muted">Log Files</div>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-center">
+              {% set kml_files = [] %}
+              {% for file in files %}
+                {% if file.name.endswith('.kml') %}
+                  {% set _ = kml_files.append(file) %}
+                {% endif %}
+              {% endfor %}
+              <div class="h4 text-secondary">{{ kml_files|length }}</div>
+              <div class="text-muted">KML Files</div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-5">
+          <i data-feather="inbox" class="mb-3" style="width: 64px; height: 64px; opacity: 0.3;"></i>
+          <h6 class="text-muted">No Files Found</h6>
+          <p class="text-muted mb-4">
+            No Kismet files are currently available for download.<br>
+            Start the Kismet service to begin capturing wireless data.
+          </p>
+          <div class="d-flex justify-content-center gap-2">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+              <i data-feather="home" class="me-1"></i>
+              Go to Dashboard
+            </a>
+            <a href="{{ url_for('config') }}" class="btn btn-outline-secondary">
+              <i data-feather="settings" class="me-1"></i>
+              Configure Kismet
+            </a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete All Confirmation Modal -->
+<div class="modal fade" id="deleteAllModal" tabindex="-1" aria-labelledby="deleteAllModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('delete_all_files') }}" class="modal-content" onsubmit="return confirmBulkDelete();">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteAllModalLabel">
+          <i data-feather="trash-2" class="me-2"></i>
+          Delete All Files
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-danger">
+          This will permanently delete <strong>all capture/log/archive files</strong> in the current directory:
+          <br><code>{{ current_directory or default_directory }}</code>
+        </p>
+        <p>Type <code>yes</code> to confirm:</p>
+        <div class="mb-3">
+          <input type="text" name="confirm_text" id="confirm_bulk_input" class="form-control" placeholder="yes" autocomplete="off">
+        </div>
+        <input type="hidden" name="directory" value="{{ current_directory or default_directory }}">
+        <div class="form-text">This action cannot be undone.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" id="delete-all-submit" class="btn btn-danger" disabled>Delete All</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- File Info Modal -->
+<div class="modal fade" id="fileInfoModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i data-feather="info" class="me-2"></i>
+          File Information
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="row">
+          <dt class="col-sm-4">Filename:</dt>
+          <dd class="col-sm-8 font-monospace" id="modal-filename"></dd>
+
+          <dt class="col-sm-4">Size:</dt>
+          <dd class="col-sm-8" id="modal-size"></dd>
+
+          <dt class="col-sm-4">Modified:</dt>
+          <dd class="col-sm-8" id="modal-modified"></dd>
+
+          <dt class="col-sm-4">Type:</dt>
+          <dd class="col-sm-8" id="modal-type"></dd>
+        </dl>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="modal-download">
+          <i data-feather="download" class="me-1"></i>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function refreshFiles() {
+    const url = new URL(window.location);
+    window.location.href = url.toString();
+}
+
+function confirmBulkDelete() {
+    const input = document.getElementById('confirm_bulk_input');
+    const submitBtn = document.getElementById('delete-all-submit');
+    
+    if (input.value.toLowerCase() === 'yes') {
+        return true;
+    } else {
+        alert('Please type "yes" to confirm deletion');
+        return false;
+    }
+}
+
+function showFileInfo(filename, size, modified) {
+    document.getElementById('modal-filename').textContent = filename;
+    document.getElementById('modal-size').textContent = formatFileSize(parseInt(size));
+    document.getElementById('modal-modified').textContent = modified;
+    
+    // Determine file type
+    let fileType = 'Unknown';
+    if (filename.endsWith('.pcapppi') || filename.endsWith('.pcapng')) {
+        fileType = 'Network Capture';
+    } else if (filename.endsWith('.kismet') || filename.endsWith('.kismet-journal')) {
+        fileType = 'Kismet Log';
+    } else if (filename.endsWith('.wiglecsv')) {
+        fileType = 'Wigle CSV';
+    } else if (filename.endsWith('.kml')) {
+        fileType = 'KML File';
+    }
+    
+    document.getElementById('modal-type').textContent = fileType;
+    
+    // Set up download button
+    const downloadBtn = document.getElementById('modal-download');
+    downloadBtn.onclick = () => {
+        window.location.href = `/download/${encodeURIComponent(filename)}`;
+    };
+    
+    const modal = new bootstrap.Modal(document.getElementById('fileInfoModal'));
+    modal.show();
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+function convertToKML(filename, directory) {
+    if (confirm(`Convert ${filename} to KML format?\n\nThis will extract location data and create a Google Earth compatible file.`)) {
+        // Show loading indicator
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Converting...';
+        btn.disabled = true;
+        
+        // Make AJAX request to convert file
+        fetch('/convert-to-kml', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filename: filename,
+                directory: directory
+            })
+        })
+        .then(response => {
+            // Log response details for debugging
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            
+            // Check content type
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+            }
+            
+            // Parse JSON response
+            return response.json().then(data => {
+                if (!response.ok) {
+                    throw new Error(data.error || `Server error: ${response.status}`);
+                }
+                return data;
+            });
+        })
+        .then(data => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            
+            if (data.success) {
+                alert(`Successfully converted to ${data.output_file}!\n\nThe KML file has been created in the same directory.`);
+                refreshFiles();
+            } else {
+                alert(`Error converting file: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            console.error('KML conversion error:', error);
+            alert(`Error: ${error.message || error}`);
+        });
+    }
+}
+
+// Enable/disable delete all button based on confirmation input
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmInput = document.getElementById('confirm_bulk_input');
+    const submitBtn = document.getElementById('delete-all-submit');
+    
+    confirmInput.addEventListener('input', function() {
+        submitBtn.disabled = this.value.toLowerCase() !== 'yes';
+    });
+});
+</script>
+{% endblock %}

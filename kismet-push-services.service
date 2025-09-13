@@ -1,0 +1,17 @@
+[Unit]
+Description=Kismet Push Services Startup
+After=network-online.target kismet-webui.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/opt/kismet-webui
+ExecStart=/usr/bin/python3 /opt/kismet-webui/push_services_startup.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

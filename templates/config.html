@@ -1,0 +1,1292 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Kismet Web Interface{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i data-feather="settings" class="me-2"></i>
+                    Kismet Configuration
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-outline-info" onclick="detectAllDevices()">
+                        <i data-feather="search" class="me-1"></i>
+                        Detect Devices
+                    </button>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                        <i data-feather="arrow-left" class="me-1"></i>
+                        Back to Dashboard
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="config-form" novalidate>
+                    
+                    <!-- Wardriving Mode Section -->
+                    <div class="mb-4">
+                        <h6 class="text-primary mb-3">Wardriving Mode</h6>
+                        <div class="card border-warning">
+                            <div class="card-body">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="wardrive_mode" name="wardrive_mode" 
+                                           {% if current_config and current_config.get('wardrive_mode') %}checked{% endif %} 
+                                           onchange="toggleWardrivingMode()">
+                                    <label class="form-check-label" for="wardrive_mode">
+                                        <strong>Enable Wardriving Mode</strong>
+                                    </label>
+                                </div>
+                                <div class="mt-2 text-muted">
+                                    <small>
+                                        Wardriving mode optimizes Kismet for basic AP collection while driving. This mode:
+                                        <ul class="mb-0 mt-1">
+                                            <li>Tracks only access points (no client devices)</li>
+                                            <li>Disables HT/VHT channels for faster scanning</li>
+                                            <li>Enables WigleCSV logging for easy upload</li>
+                                            <li>Reduces memory usage and processing overhead</li>
+                                            <li>Disables packet logging and handshake capture</li>
+                                        </ul>
+                                    </small>
+                                </div>
+                                <div class="alert alert-warning mt-3 mb-0" id="wardrive_warning" style="display: none;">
+                                    <i data-feather="alert-triangle" class="me-2"></i>
+                                    <strong>Warning:</strong> Wardriving mode disables most logging and IDS functionality. Only basic AP detection will be active.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Sources Section -->
+                    <div class="mb-5">
+                        <h6 class="text-primary mb-3">Data Sources</h6>
+                        
+                        <!-- WiFi Sources -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="wifi" class="me-2"></i>
+                                    WiFi Interfaces
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="wifi-sources">
+                                    {% for source in current_config.data_sources %}
+                                        {% if source.type == 'wifi' %}
+                                        <div class="source-row mb-4">
+                                            <div class="row mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Interface</label>
+                                                    <div class="input-group">
+                                                        <select class="form-select interface-dropdown" name="wifi_interface" onchange="handleInterfaceChange(this)">
+                                                            <option value="">Select interface...</option>
+                                                            <option value="{{ source.interface }}" selected>{{ source.interface }}</option>
+                                                        </select>
+                                                        <input type="text" class="form-control interface-manual" 
+                                                               value="{{ source.interface }}" placeholder="e.g., wlan0" style="display: none;">
+                                                        <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                                                            <i data-feather="edit-2"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <label class="form-label">Name (Optional)</label>
+                                                    <input type="text" class="form-control" name="wifi_name" 
+                                                           value="{{ source.name }}" placeholder="Optional name">
+                                                </div>
+                                                <div class="col-md-1">
+                                                    <label class="form-label">&nbsp;</label>
+                                                    <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                                                        <i data-feather="trash-2"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Channel Configuration -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="wifi_channel_hop" value="{{ loop.index0 }}"
+                                                               {{ 'checked' if source.get('channel_hop', True) }}>
+                                                        <label class="form-check-label">
+                                                            Channel Hopping
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">Fixed Channel</label>
+                                                    <input type="text" name="wifi_channel" class="form-control" 
+                                                           value="{{ source.get('channel', '') }}" placeholder="6, 36, 1W6e">
+                                                    <div class="form-text">Leave empty for hopping</div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">Channel List</label>
+                                                    <input type="text" name="wifi_channels" class="form-control" 
+                                                           value="{{ source.get('channels', '') }}" placeholder="1,6,11">
+                                                    <div class="form-text">Comma-separated</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Hop Speed -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-12">
+                                                    <label class="form-label">Hop Speed (hops/sec)</label>
+                                                    <input type="text" name="wifi_hop_speed" class="form-control" 
+                                                           value="{{ source.get('channel_hop_rate', '5/sec') }}" placeholder="5/sec">
+                                                    <div class="form-text">Default: 5/sec (1-20 hops per second)</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- WiFi Advanced Options -->
+                                            <div class="mb-3">
+                                                <label class="form-label">WiFi Advanced Options</label>
+                                                <div class="row">
+                                                    <div class="col-md-2">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="wifi_ht_channels" value="{{ loop.index0 }}"
+                                                                   {{ 'checked' if source.get('ht_channels', True) }}>
+                                                            <label class="form-check-label">HT 40MHz</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="wifi_vht_channels" value="{{ loop.index0 }}"
+                                                                   {{ 'checked' if source.get('vht_channels', True) }}>
+                                                            <label class="form-check-label">VHT 80/160MHz</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="wifi_band24ghz" value="{{ loop.index0 }}"
+                                                                   {{ 'checked' if source.get('band24ghz', True) }}>
+                                                            <label class="form-check-label">2.4GHz</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="wifi_band5ghz" value="{{ loop.index0 }}"
+                                                                   {{ 'checked' if source.get('band5ghz', True) }}>
+                                                            <label class="form-check-label">5GHz</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="wifi_band6ghz" value="{{ loop.index0 }}"
+                                                                   {{ 'checked' if source.get('band6ghz', False) }}>
+                                                            <label class="form-check-label">6GHz</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <hr class="my-3">
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <button type="button" class="btn btn-outline-primary" onclick="addWifiSource()">
+                                    <i data-feather="plus" class="me-1"></i>
+                                    Add WiFi Interface
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Bluetooth Sources -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="bluetooth" class="me-2"></i>
+                                    Bluetooth Interfaces
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="bluetooth-sources">
+                                    {% for source in current_config.data_sources %}
+                                        {% if source.type == 'bluetooth' %}
+                                        <div class="row mb-3 source-row">
+                                            <div class="col-md-6">
+                                                <label class="form-label">Interface</label>
+                                                <div class="input-group">
+                                                    <select class="form-select interface-dropdown" name="bt_interface" 
+                                                            data-initial="{{ source.interface }}"
+                                                            onchange="handleInterfaceChange(this)">
+                                                        <option value="">Select interface...</option>
+                                                        <option value="{{ source.interface }}" selected>{{ source.interface }}</option>
+                                                    </select>
+                                                    <input type="text" class="form-control interface-manual" 
+                                                           value="{{ source.interface }}" placeholder="e.g., hci0" style="display: none;">
+                                                    <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                                                        <i data-feather="edit-2"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Name</label>
+                                                <input type="text" class="form-control" name="bt_name" 
+                                                       value="{{ source.name }}" placeholder="Optional name">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                                                    <i data-feather="trash-2"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <button type="button" class="btn btn-outline-primary" onclick="addBluetoothSource()">
+                                    <i data-feather="plus" class="me-1"></i>
+                                    Add Bluetooth Interface
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- SDR RTL433 Sources -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">
+                                    <i data-feather="radio" class="me-2"></i>
+                                    SDR RTL433 Devices
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i data-feather="info" class="me-2"></i>
+                                    RTL-SDR devices support frequencies like 433MHz (default), 915MHz, and custom frequencies. 
+                                    Use <code>rtl_test</code> to detect available devices.
+                                </div>
+                                
+                                <div id="sdr-sources">
+                                    {% for source in current_config.data_sources %}
+                                        {% if source.type == 'rtl433' %}
+                                        <div class="row mb-3 source-row">
+                                            <div class="col-md-3">
+                                                <label class="form-label">Device</label>
+                                                <div class="input-group">
+                                                    <select class="form-select interface-dropdown" name="sdr_device" 
+                                                            data-initial="{{ source.device }}"
+                                                            onchange="handleInterfaceChange(this)">
+                                                        <option value="">Select device...</option>
+                                                        <option value="{{ source.device }}" selected>{{ source.device }}</option>
+                                                    </select>
+                                                    <input type="text" class="form-control interface-manual" 
+                                                           value="{{ source.device }}" placeholder="e.g., rtl433-0" style="display: none;">
+                                                    <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                                                        <i data-feather="edit-2"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Name</label>
+                                                <input type="text" class="form-control" name="sdr_name" 
+                                                       value="{{ source.name }}" placeholder="Optional name">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label">Frequency</label>
+                                                <div class="frequency-input-group">
+                                                    {% set is_custom = source.get('frequency') and source.get('frequency') not in ['433.920MHz', '868.3MHz', '315MHz', '915MHz', 'name=adsb,type=rtladsb', 'name=rtlamr,type=rtlamr'] %}
+                                                    <select class="form-select frequency-select" name="sdr_frequency" onchange="toggleCustomFrequency(this)"
+                                                            style="{{ 'display: none;' if is_custom else '' }}">
+                                                        <option value="433.920MHz" {{ 'selected' if source.get('frequency', '433.920MHz') == '433.920MHz' }}>433.92MHz</option>
+                                                        <option value="868.3MHz" {{ 'selected' if source.get('frequency') == '868.3MHz' }}>868.3MHz</option>
+                                                        <option value="315MHz" {{ 'selected' if source.get('frequency') == '315MHz' }}>315MHz</option>
+                                                        <option value="915MHz" {{ 'selected' if source.get('frequency') == '915MHz' }}>915MHz</option>
+                                                        <option value="name=adsb,type=rtladsb" {{ 'selected' if source.get('frequency') == 'name=adsb,type=rtladsb' }}>ADSB (1090MHz)</option>
+                                                        <option value="name=rtlamr,type=rtlamr" {{ 'selected' if source.get('frequency') == 'name=rtlamr,type=rtlamr' }}>RTL-AMR (900MHz)</option>
+                                                        <option value="custom" {{ 'selected' if is_custom }}>Custom</option>
+                                                    </select>
+                                                    <input type="text" class="form-control custom-frequency" 
+                                                           name="{{ 'sdr_frequency' if is_custom else 'sdr_custom_frequency' }}" 
+                                                           value="{{ source.get('frequency', '') if is_custom else '' }}"
+                                                           placeholder="e.g., 868MHz" 
+                                                           style="{{ 'display: block;' if is_custom else 'display: none;' }}"
+                                                           onblur="revertToFrequencySelect(this)">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label">Gain</label>
+                                                <input type="text" class="form-control" name="sdr_gain" 
+                                                       value="{{ source.get('gain', '') }}" placeholder="Auto">
+                                            </div>
+                                            <div class="col-md-1">
+                                                <label class="form-label">PPM</label>
+                                                <input type="text" class="form-control" name="sdr_ppm_error" 
+                                                       value="{{ source.get('ppm_error', '') }}" placeholder="0">
+                                            </div>
+                                            <div class="col-md-1">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                                                    <i data-feather="trash-2"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <button type="button" class="btn btn-outline-primary" onclick="addSdrSource()">
+                                    <i data-feather="plus" class="me-1"></i>
+                                    Add SDR Device
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- GPS Configuration -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i data-feather="map-pin" class="me-2"></i>
+                                GPS Configuration
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label">GPS Type</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_disabled" value="disabled" 
+                                               onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type', 'disabled') == 'disabled' }}>
+                                        <label class="form-check-label" for="gps_disabled">
+                                            Disabled
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_gpsd" value="gpsd" 
+                                               onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type') == 'gpsd' }}>
+                                        <label class="form-check-label" for="gps_gpsd">
+                                            GPSD Daemon
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_virtual" value="virtual" 
+                                               onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type') == 'virtual' }}>
+                                        <label class="form-check-label" for="gps_virtual">
+                                            Virtual GPS (Fixed Location)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- GPSD Configuration -->
+                            <div id="gpsd_config" class="row mb-3" style="display: none;">
+                                <div class="col-md-6">
+                                    <label for="gps_host" class="form-label">GPSD Host</label>
+                                    <input type="text" class="form-control" name="gps_host" id="gps_host" 
+                                           value="{{ current_config.gps_config.get('host', 'localhost') }}" placeholder="localhost">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="gps_port" class="form-label">GPSD Port</label>
+                                    <input type="text" class="form-control" name="gps_port" id="gps_port" 
+                                           value="{{ current_config.gps_config.get('port', 2947) }}" placeholder="2947">
+                                </div>
+                            </div>
+                            
+                            <!-- Virtual GPS Configuration -->
+                            <div id="virtual_gps_config" class="mb-3" style="display: none;">
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Coordinate Format</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="coord_format" id="coord_latlon" value="latlon" 
+                                                   onclick="toggleCoordFormat()" checked>
+                                            <label class="form-check-label" for="coord_latlon">
+                                                Latitude/Longitude (Decimal Degrees)
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="coord_format" id="coord_mgrs" value="mgrs"
+                                                   onclick="toggleCoordFormat()">
+                                            <label class="form-check-label" for="coord_mgrs">
+                                                MGRS (Military Grid Reference System)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Lat/Lon Inputs -->
+                                <div id="latlon_inputs" class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="gps_lat" class="form-label">Latitude</label>
+                                        <input type="text" class="form-control" name="gps_lat" id="gps_lat" 
+                                               value="{{ current_config.gps_config.get('lat', '') }}" placeholder="40.7128">
+                                        <div class="form-text">Decimal degrees (e.g., 40.7128)</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="gps_lon" class="form-label">Longitude</label>
+                                        <input type="text" class="form-control" name="gps_lon" id="gps_lon" 
+                                               value="{{ current_config.gps_config.get('lon', '') }}" placeholder="-74.0060">
+                                        <div class="form-text">Decimal degrees (e.g., -74.0060)</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="gps_alt" class="form-label">Altitude (m)</label>
+                                        <input type="text" class="form-control" name="gps_alt" id="gps_alt" 
+                                               value="{{ current_config.gps_config.get('alt', '') }}" placeholder="10">
+                                        <div class="form-text">Meters above sea level</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- MGRS Input -->
+                                <div id="mgrs_inputs" class="row mb-3" style="display: none;">
+                                    <div class="col-md-8">
+                                        <label for="gps_mgrs" class="form-label">MGRS Coordinate</label>
+                                        <input type="text" class="form-control" name="gps_mgrs" id="gps_mgrs" 
+                                               value="{{ current_config.gps_config.get('mgrs', '') }}" placeholder="18TWL8040008400">
+                                        <div class="form-text">Full MGRS coordinate (e.g., 18TWL8040008400)</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="gps_alt_mgrs" class="form-label">Altitude (m)</label>
+                                        <input type="text" class="form-control" name="gps_alt_mgrs" id="gps_alt_mgrs" 
+                                               value="{{ current_config.gps_config.get('alt', '') }}" placeholder="10">
+                                        <div class="form-text">Meters above sea level</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- File Storage & Logging -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i data-feather="file-text" class="me-2"></i>
+                                File Storage & Logging
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Log Types</label>
+                                    <small class="form-text text-muted">Multiple formats can be enabled simultaneously</small>
+                                    
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" name="log_types" value="kismet" id="log_kismet"
+                                               {{ 'checked' if 'kismet' in current_config.logging_config.get('log_types', []) }}>
+                                        <label class="form-check-label" for="log_kismet">
+                                            <strong>Kismet DB</strong><br>
+                                            <small class="text-muted">Unified SQLite database with all data</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" name="log_types" value="pcapng" id="log_pcapng"
+                                               {{ 'checked' if 'pcapng' in current_config.logging_config.get('log_types', []) }}>
+                                        <label class="form-check-label" for="log_pcapng">
+                                            <strong>PCAP-NG</strong><br>
+                                            <small class="text-muted">Modern packet capture format (Wireshark compatible)</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" name="log_types" value="pcapppi" id="log_pcapppi"
+                                               {{ 'checked' if 'pcapppi' in current_config.logging_config.get('log_types', []) }}>
+                                        <label class="form-check-label" for="log_pcapppi">
+                                            <strong>PCAP-PPI</strong><br>
+                                            <small class="text-muted">Legacy format for older tools</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" name="log_types" value="wiglecsv" id="log_wiglecsv"
+                                               {{ 'checked' if 'wiglecsv' in current_config.logging_config.get('log_types', []) }}>
+                                        <label class="form-check-label" for="log_wiglecsv">
+                                            <strong>Wigle CSV</strong><br>
+                                            <small class="text-muted">For uploading to Wigle.net</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Save Location</label>
+                                        <input type="text" class="form-control" name="log_prefix" 
+                                               value="{{ current_config.logging_config.get('log_prefix', '/home/user/kismet') }}" placeholder="/home/user/kismet">
+                                        <small class="form-text text-muted">Directory will be created if it doesn't exist</small>
+                                    </div>
+                                    
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Log Title</label>
+                                        <input type="text" class="form-control" name="log_title" 
+                                               value="{{ current_config.logging_config.get('log_title', 'Kismet_Wireless_Survey') }}" placeholder="Kismet_Wireless_Survey">
+                                        <small class="form-text text-muted">Descriptive title for this logging session</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mt-3 border-info">
+                                <div class="card-header bg-info bg-opacity-10">
+                                    <h6 class="card-title mb-0 text-info">PCAP-NG Settings</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="pcapng_log_duplicate_packets" id="log_duplicates"
+                                                       {{ 'checked' if current_config.logging_config.get('pcapng_log_duplicate_packets', True) }}>
+                                                <label class="form-check-label" for="log_duplicates">
+                                                    <strong>Log Duplicate Packets</strong><br>
+                                                    <small class="text-muted">Keep packets seen by multiple sources</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="pcapng_log_data_packets" id="log_data"
+                                                       {{ 'checked' if current_config.logging_config.get('pcapng_log_data_packets', True) }}>
+                                                <label class="form-check-label" for="log_data">
+                                                    <strong>Log Data Packets</strong><br>
+                                                    <small class="text-muted">Include data frames (uncheck for management only)</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Device Detection & Alerts -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i data-feather="bell" class="me-2"></i>
+                                Device Detection & Alerts
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Device Found Alerts</label>
+                                    <small class="form-text text-muted">Raise alert when devices are detected</small>
+                                    <textarea class="form-control" name="device_found_alerts" rows="3" 
+                                              placeholder="40:05:89:5A:65:BB&#10;Enter MAC addresses or use masks (e.g., 00:11:22:00:00:00/FF:FF:FF:00:00:00 for OUI matching)">{{ current_config.get('device_found_alerts', '') }}</textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Device Lost Alerts</label>
+                                    <small class="form-text text-muted">Raise alert when devices disappear</small>
+                                    <textarea class="form-control" name="device_lost_alerts" rows="3" 
+                                              placeholder="40:05:89:5A:65:BB&#10;Enter MAC addresses or use masks for OUI-based matching">{{ current_config.get('device_lost_alerts', '') }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Device Found Timeout (seconds)</label>
+                                    <input type="number" class="form-control" name="device_found_timeout" 
+                                           value="{{ current_config.get('device_found_timeout', 30) }}" placeholder="30">
+                                    <small class="form-text text-muted">Time before device is considered 'found' after first detection</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Device Lost Timeout (seconds)</label>
+                                    <input type="number" class="form-control" name="device_lost_timeout" 
+                                           value="{{ current_config.get('device_lost_timeout', 30) }}" placeholder="30">
+                                    <small class="form-text text-muted">Time of inactivity before device is considered 'lost'</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Device Filtering (Whitelist) -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i data-feather="filter" class="me-2"></i>
+                                Device Filtering (Whitelist)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Default Filter Action</label>
+                                    <select class="form-select" name="default_filter_action">
+                                        <option value="pass" {{ 'selected' if current_config.get('default_filter_action', 'pass') == 'pass' }}>Pass (Log all devices by default)</option>
+                                        <option value="block" {{ 'selected' if current_config.get('default_filter_action') == 'block' }}>Block (Only log whitelisted devices)</option>
+                                    </select>
+                                    <small class="form-text text-muted">Controls whether devices are logged by default</small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Whitelist Devices</label>
+                                <small class="form-text text-muted">Devices to exclude from logging or specifically include</small>
+                                
+                                <div id="device-filters">
+                                    {% for filter in current_config.get('device_filters', []) %}
+                                    <div class="row mb-2 filter-row">
+                                        <div class="col-md-3">
+                                            <select class="form-select" name="filter_type">
+                                                <option value="IEEE802.11" {{ 'selected' if filter.type == 'IEEE802.11' }}>IEEE802.11</option>
+                                                <option value="Bluetooth" {{ 'selected' if filter.type == 'Bluetooth' }}>Bluetooth</option>
+                                                <option value="RTL433" {{ 'selected' if filter.type == 'RTL433' }}>RTL433</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control" name="filter_address" 
+                                                   value="{{ filter.address }}" placeholder="AA:BB:CC:DD:EE:FF">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <select class="form-select" name="filter_action">
+                                                <option value="pass" {{ 'selected' if filter.action == 'pass' }}>Pass</option>
+                                                <option value="block" {{ 'selected' if filter.action == 'block' }}>Block</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-1">
+                                            <button type="button" class="btn btn-outline-danger" onclick="removeFilter(this)">
+                                                <i data-feather="trash-2"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <button type="button" class="btn btn-outline-primary" onclick="addDeviceFilter()">
+                                    <i data-feather="plus" class="me-1"></i>
+                                    Add Device Filter
+                                </button>
+                                
+                                <div class="mt-2">
+                                    <small class="form-text text-muted">
+                                        Filter specific devices from being logged. Use with default "Block" to create a whitelist-only mode.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Save Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Detection Status Modal -->
+<div class="modal fade" id="detectionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i data-feather="search" class="me-2"></i>
+                    Device Detection
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detection-status">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Detecting devices...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Device source management functions
+function addWifiSource() {
+    const container = document.getElementById('wifi-sources');
+    const newRow = createSourceRow('wifi');
+    container.appendChild(newRow);
+    feather.replace();
+    populateInterfaceDropdown(newRow.querySelector('.interface-dropdown'), 'wifi');
+}
+
+function addBluetoothSource() {
+    const container = document.getElementById('bluetooth-sources');
+    const newRow = createSourceRow('bluetooth');
+    container.appendChild(newRow);
+    feather.replace();
+    populateInterfaceDropdown(newRow.querySelector('.interface-dropdown'), 'bluetooth');
+}
+
+function addSdrSource() {
+    const container = document.getElementById('sdr-sources');
+    const newRow = createSdrSourceRow();
+    container.appendChild(newRow);
+    feather.replace();
+    populateInterfaceDropdown(newRow.querySelector('.interface-dropdown'), 'sdr');
+}
+
+function createSourceRow(type) {
+    const row = document.createElement('div');
+    row.className = type === 'wifi' ? 'source-row mb-4' : 'row mb-3 source-row';
+    
+    const interfaceName = type === 'bluetooth' ? 'bt_interface' : 'wifi_interface';
+    const nameName = type === 'bluetooth' ? 'bt_name' : 'wifi_name';
+    const placeholder = type === 'bluetooth' ? 'e.g., hci0' : 'e.g., wlan0';
+    
+    if (type === 'wifi') {
+        const index = document.querySelectorAll('#wifi-sources .source-row').length;
+        row.innerHTML = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Interface</label>
+                    <div class="input-group">
+                        <select class="form-select interface-dropdown" name="${interfaceName}" onchange="handleInterfaceChange(this)">
+                            <option value="">Select interface...</option>
+                        </select>
+                        <input type="text" class="form-control interface-manual" name="${interfaceName}" 
+                               placeholder="${placeholder}" style="display: none;">
+                        <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                            <i data-feather="edit-2"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Name (Optional)</label>
+                    <input type="text" class="form-control" name="${nameName}" placeholder="Optional name">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                        <i data-feather="trash-2"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Channel Configuration -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="wifi_channel_hop" value="${index}" checked>
+                        <label class="form-check-label">
+                            Channel Hopping
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Fixed Channel</label>
+                    <input type="text" name="wifi_channel" class="form-control" placeholder="6, 36, 1W6e">
+                    <div class="form-text">Leave empty for hopping</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Channel List</label>
+                    <input type="text" name="wifi_channels" class="form-control" placeholder="1,6,11">
+                    <div class="form-text">Comma-separated</div>
+                </div>
+            </div>
+            
+            <!-- Hop Speed -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label">Hop Speed (hops/sec)</label>
+                    <input type="text" name="wifi_hop_speed" class="form-control" value="5/sec" placeholder="5/sec">
+                    <div class="form-text">Default: 5/sec (1-20 hops per second)</div>
+                </div>
+            </div>
+            
+            <!-- WiFi Advanced Options -->
+            <div class="mb-3">
+                <label class="form-label">WiFi Advanced Options</label>
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="wifi_ht_channels" value="${index}" checked>
+                            <label class="form-check-label">HT 40MHz</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="wifi_vht_channels" value="${index}" checked>
+                            <label class="form-check-label">VHT 80/160MHz</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="wifi_band24ghz" value="${index}" checked>
+                            <label class="form-check-label">2.4GHz</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="wifi_band5ghz" value="${index}" checked>
+                            <label class="form-check-label">5GHz</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="wifi_band6ghz" value="${index}">
+                            <label class="form-check-label">6GHz</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <hr class="my-3">
+        `;
+    } else {
+        // Bluetooth or other simple row
+        row.innerHTML = `
+            <div class="col-md-6">
+                <label class="form-label">Interface</label>
+                <div class="input-group">
+                    <select class="form-select interface-dropdown" name="${interfaceName}" onchange="handleInterfaceChange(this)">
+                        <option value="">Select interface...</option>
+                    </select>
+                    <input type="text" class="form-control interface-manual" 
+                           placeholder="${placeholder}" style="display: none;">
+                    <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                        <i data-feather="edit-2"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" name="${nameName}" placeholder="Optional name">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                    <i data-feather="trash-2"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    return row;
+}
+
+function createSdrSourceRow() {
+    const row = document.createElement('div');
+    row.className = 'row mb-3 source-row';
+    
+    row.innerHTML = `
+        <div class="col-md-3">
+            <label class="form-label">Device</label>
+            <div class="input-group">
+                <select class="form-select interface-dropdown" name="sdr_device" onchange="handleInterfaceChange(this)">
+                    <option value="">Select device...</option>
+                </select>
+                <input type="text" class="form-control interface-manual" 
+                       placeholder="e.g., rtl433-0" style="display: none;">
+                <button type="button" class="btn btn-outline-secondary" onclick="toggleManualInput(this)">
+                    <i data-feather="edit-2"></i>
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" name="sdr_name" placeholder="Optional name">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Frequency</label>
+            <div class="frequency-input-group">
+                <select class="form-select frequency-select" name="sdr_frequency" onchange="toggleCustomFrequency(this)">
+                    <option value="433.920MHz" selected>433.92MHz</option>
+                    <option value="868.3MHz">868.3MHz</option>
+                    <option value="315MHz">315MHz</option>
+                    <option value="915MHz">915MHz</option>
+                    <option value="name=adsb,type=rtladsb">ADSB (1090MHz)</option>
+                    <option value="name=rtlamr,type=rtlamr">RTL-AMR (900MHz)</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <input type="text" class="form-control custom-frequency" name="sdr_custom_frequency" 
+                       placeholder="e.g., 868MHz" style="display: none;"
+                       onblur="revertToFrequencySelect(this)">
+            </div>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Gain</label>
+            <input type="text" class="form-control" name="sdr_gain" placeholder="Auto">
+        </div>
+        <div class="col-md-1">
+            <label class="form-label">PPM</label>
+            <input type="text" class="form-control" name="sdr_ppm_error" placeholder="0">
+        </div>
+        <div class="col-md-1">
+            <label class="form-label">&nbsp;</label>
+            <button type="button" class="btn btn-outline-danger d-block" onclick="removeSource(this)">
+                <i data-feather="trash-2"></i>
+            </button>
+        </div>
+    `;
+    
+    return row;
+}
+
+function removeSource(button) {
+    const row = button.closest('.source-row');
+    row.remove();
+}
+
+function toggleManualInput(button) {
+    const inputGroup = button.parentElement;
+    const dropdown = inputGroup.querySelector('.interface-dropdown');
+    const manual = inputGroup.querySelector('.interface-manual');
+    
+    if (dropdown.style.display === 'none') {
+        // Switch back to dropdown
+        dropdown.style.display = 'block';
+        dropdown.setAttribute('name', dropdown.dataset.originalName || dropdown.name);
+        manual.style.display = 'none';
+        manual.removeAttribute('name');
+        dropdown.value = manual.value || dropdown.value;
+    } else {
+        // Switch to manual input
+        dropdown.dataset.originalName = dropdown.getAttribute('name');
+        dropdown.removeAttribute('name');
+        dropdown.style.display = 'none';
+        manual.setAttribute('name', dropdown.dataset.originalName);
+        manual.style.display = 'block';
+        manual.value = dropdown.value;
+        manual.focus();
+    }
+}
+
+function handleInterfaceChange(select) {
+    const manual = select.parentElement.querySelector('.interface-manual');
+    if (manual) {
+        manual.value = select.value;
+    }
+}
+
+function toggleCustomFrequency(select) {
+    const frequencyGroup = select.parentElement;
+    const customInput = frequencyGroup.querySelector('.custom-frequency');
+    
+    if (select.value === 'custom') {
+        // Show custom input
+        select.style.display = 'none';
+        customInput.style.display = 'block';
+        customInput.focus();
+        customInput.name = 'sdr_frequency'; // Use the same name so it gets submitted
+        select.name = ''; // Remove name from select so it doesn't override
+    }
+}
+
+function revertToFrequencySelect(input) {
+    const frequencyGroup = input.parentElement;
+    const select = frequencyGroup.querySelector('.frequency-select');
+    
+    if (input.value.trim() === '') {
+        // If custom input is empty, revert to dropdown
+        select.style.display = 'block';
+        input.style.display = 'none';
+        select.name = 'sdr_frequency';
+        input.name = 'sdr_custom_frequency';
+        select.value = '433.920MHz'; // Default frequency
+    }
+}
+
+// Device detection functions
+function detectAllDevices() {
+    const modal = new bootstrap.Modal(document.getElementById('detectionModal'));
+    modal.show();
+    
+    const statusDiv = document.getElementById('detection-status');
+    statusDiv.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Detecting devices...</p>
+        </div>
+    `;
+    
+    DeviceDetection.detectAllDevices()
+        .then(devices => {
+            displayDetectionResults(devices);
+            updateInterfaceDropdowns(devices);
+        })
+        .catch(error => {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i data-feather="alert-circle" class="me-2"></i>
+                    Detection failed: ${error.message}
+                </div>
+            `;
+            feather.replace();
+        });
+}
+
+function displayDetectionResults(devices) {
+    const statusDiv = document.getElementById('detection-status');
+    let html = '<h6>Detection Results:</h6>';
+    
+    // WiFi devices
+    if (devices.wifi && devices.wifi.length > 0) {
+        html += '<div class="mb-3"><strong>WiFi Interfaces:</strong><ul class="list-unstyled ms-3">';
+        devices.wifi.forEach(device => {
+            html += `<li><i data-feather="wifi" class="me-1"></i> ${device['interface']} (${device.type})</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Bluetooth devices
+    if (devices.bluetooth && devices.bluetooth.length > 0) {
+        html += '<div class="mb-3"><strong>Bluetooth Interfaces:</strong><ul class="list-unstyled ms-3">';
+        devices.bluetooth.forEach(device => {
+            html += `<li><i data-feather="bluetooth" class="me-1"></i> ${device['interface']} (${device.address || 'N/A'})</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // SDR devices
+    if (devices.sdr && devices.sdr.length > 0) {
+        html += '<div class="mb-3"><strong>SDR Devices:</strong><ul class="list-unstyled ms-3">';
+        devices.sdr.forEach(device => {
+            html += `<li><i data-feather="radio" class="me-1"></i> ${device.device} (${device.name})</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    if ((!devices.wifi || devices.wifi.length === 0) && 
+        (!devices.bluetooth || devices.bluetooth.length === 0) && 
+        (!devices.sdr || devices.sdr.length === 0)) {
+        html += '<div class="alert alert-warning"><i data-feather="alert-triangle" class="me-2"></i>No devices detected</div>';
+    }
+    
+    statusDiv.innerHTML = html;
+    feather.replace();
+}
+
+function updateInterfaceDropdowns(devices) {
+    // Update WiFi dropdowns
+    document.querySelectorAll('select[name="wifi_interface"]').forEach(select => {
+        populateDropdown(select, devices.wifi || [], 'interface');
+    });
+    
+    // Update Bluetooth dropdowns
+    document.querySelectorAll('select[name="bt_interface"]').forEach(select => {
+        populateDropdown(select, devices.bluetooth || [], 'interface');
+    });
+    
+    // Update SDR dropdowns
+    document.querySelectorAll('select[name="sdr_device"]').forEach(select => {
+        populateDropdown(select, devices.sdr || [], 'device');
+    });
+}
+
+function populateInterfaceDropdown(dropdown, type) {
+    DeviceDetection.detectDevices(type)
+        .then(devices => {
+            const field = type === 'sdr' ? 'device' : 'interface';
+            populateDropdown(dropdown, devices, field);
+        })
+        .catch(error => {
+            console.error(`Failed to detect ${type} devices:`, error);
+        });
+}
+
+function populateDropdown(select, devices, field) {
+    // Find a stable current value
+    const manual = select.parentElement?.querySelector('.interface-manual');
+    const attrSelected = select.querySelector('option[selected]');
+    const initial = select.dataset?.initial;
+
+    const currentValue =
+        select.value ||
+        (attrSelected && attrSelected.value) ||
+        (manual && manual.value) ||
+        initial ||
+        '';
+
+    // If nothing detected, leave the select alone
+    if (!devices || devices.length === 0) {
+        if (currentValue && ![...select.options].some(o => o.value === currentValue)) {
+            const opt = document.createElement('option');
+            opt.value = currentValue;
+            opt.textContent = currentValue;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+        return;
+    }
+
+    // Rebuild while preserving currentValue...
+    while (select.options.length > 1) select.removeChild(select.lastChild);
+    if (currentValue) {
+        const opt = document.createElement('option');
+        opt.value = currentValue;
+        opt.textContent = currentValue;
+        opt.selected = true;
+        select.appendChild(opt);
+    }
+
+    const seen = new Set([currentValue]);
+    devices.forEach(device => {
+        const val = device[field];
+        if (!val || seen.has(val)) return;
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = `${val} - ${device.name || device.type || ''}`.trim();
+        select.appendChild(option);
+        seen.add(val);
+    });
+}
+
+// Device filtering functions
+function addDeviceFilter() {
+    const container = document.getElementById('device-filters');
+    const newRow = createFilterRow();
+    container.appendChild(newRow);
+    feather.replace();
+}
+
+function createFilterRow() {
+    const row = document.createElement('div');
+    row.className = 'row mb-2 filter-row';
+    
+    row.innerHTML = `
+        <div class="col-md-3">
+            <select class="form-select" name="filter_type">
+                <option value="IEEE802.11">IEEE802.11</option>
+                <option value="Bluetooth">Bluetooth</option>
+                <option value="RTL433">RTL433</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <input type="text" class="form-control" name="filter_address" 
+                   placeholder="AA:BB:CC:DD:EE:FF">
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" name="filter_action">
+                <option value="pass">Pass</option>
+                <option value="block">Block</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger" onclick="removeFilter(this)">
+                <i data-feather="trash-2"></i>
+            </button>
+        </div>
+    `;
+    
+    return row;
+}
+
+function removeFilter(button) {
+    const row = button.closest('.filter-row');
+    row.remove();
+}
+
+// GPS configuration toggle
+function toggleWardrivingMode() {
+    const checkbox = document.getElementById('wardrive_mode');
+    const warning = document.getElementById('wardrive_warning');
+    
+    // Guard against null elements
+    if (!checkbox || !warning) {
+        console.error('Wardriving mode elements not found');
+        return;
+    }
+    
+    if (checkbox.checked) {
+        warning.style.display = 'block';
+        
+        // Auto-configure for wardriving when enabled
+        // Disable HT/VHT channels on all WiFi sources
+        document.querySelectorAll('input[name="wifi_ht_channels"]').forEach(cb => cb.checked = false);
+        document.querySelectorAll('input[name="wifi_vht_channels"]').forEach(cb => cb.checked = false);
+        
+        // Enable WigleCSV logging
+        const wigleCheckbox = document.getElementById('log_wiglecsv');
+        if (wigleCheckbox) {
+            wigleCheckbox.checked = true;
+        }
+    } else {
+        warning.style.display = 'none';
+        
+        // Re-enable HT/VHT channels when wardriving mode is disabled
+        document.querySelectorAll('input[name="wifi_ht_channels"]').forEach(cb => cb.checked = true);
+        document.querySelectorAll('input[name="wifi_vht_channels"]').forEach(cb => cb.checked = true);
+    }
+}
+
+function toggleGpsOptions() {
+    // Get selected GPS type
+    const selectedType = document.querySelector('input[name="gps_type"]:checked')?.value;
+    
+    // Get config sections
+    const gpsdConfig = document.getElementById('gpsd_config');
+    const virtualGpsConfig = document.getElementById('virtual_gps_config');
+    
+    // Hide all sections first
+    if (gpsdConfig) gpsdConfig.style.display = 'none';
+    if (virtualGpsConfig) virtualGpsConfig.style.display = 'none';
+    
+    // Show appropriate section
+    if (selectedType === 'gpsd') {
+        if (gpsdConfig) gpsdConfig.style.display = 'flex';
+    } else if (selectedType === 'virtual') {
+        if (virtualGpsConfig) virtualGpsConfig.style.display = 'block';
+    }
+}
+
+// Toggle between lat/lon and MGRS inputs
+function toggleCoordFormat() {
+    const selectedFormat = document.querySelector('input[name="coord_format"]:checked')?.value;
+    const latlonInputs = document.getElementById('latlon_inputs');
+    const mgrsInputs = document.getElementById('mgrs_inputs');
+    
+    if (selectedFormat === 'mgrs') {
+        if (latlonInputs) latlonInputs.style.display = 'none';
+        if (mgrsInputs) mgrsInputs.style.display = 'flex';
+    } else {
+        if (latlonInputs) latlonInputs.style.display = 'flex';
+        if (mgrsInputs) mgrsInputs.style.display = 'none';
+    }
+}
+
+// Initialize device detection on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize GPS options visibility
+    toggleGpsOptions();
+    toggleCoordFormat();
+    
+    // Initialize wardriving mode warning on page load
+    if (document.getElementById('wardrive_mode') && document.getElementById('wardrive_mode').checked) {
+        document.getElementById('wardrive_warning').style.display = 'block';
+    }
+    
+    // Initialize custom frequency inputs for existing SDR sources
+    document.querySelectorAll('.frequency-select').forEach(select => {
+        // Check if it should show custom input on load
+        const frequencyGroup = select.parentElement;
+        const customInput = frequencyGroup.querySelector('.custom-frequency');
+        if (customInput && customInput.value && select.value === 'custom') {
+            toggleCustomFrequency(select);
+        }
+    });
+    
+    // Force the select value from data-initial if present
+    document.querySelectorAll('.interface-dropdown').forEach(sel => {
+        if (!sel.value && sel.dataset.initial) {
+            sel.value = sel.dataset.initial;
+        }
+    });
+    
+    // Wait for DeviceDetection to be available
+    if (typeof DeviceDetection !== 'undefined') {
+        // Now it's safe to populate existing dropdowns
+        document.querySelectorAll('.interface-dropdown').forEach(dropdown => {
+            const name = dropdown.name;
+            let type = 'wifi';
+            if (name.includes('bt_')) type = 'bluetooth';
+            else if (name.includes('sdr_')) type = 'sdr';
+            
+            populateInterfaceDropdown(dropdown, type);
+        });
+    } else {
+        console.warn('DeviceDetection module not loaded');
+    }
+});
+</script>
+{% endblock %}
