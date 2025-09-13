@@ -30,6 +30,7 @@ What install.sh does:
 -----------------------------------------------------------------------------
 Access the UI:
  - http://host-or-ip:5000/
+ - upon first time visiting the webui you will be prompted to set username and password
 -----------------------------------------------------------------------------
 Dashboard
 <img width="2006" height="1169" alt="dashboard" src="https://github.com/user-attachments/assets/658db454-aad1-40ba-ab80-5c3f2d819fcd" />
