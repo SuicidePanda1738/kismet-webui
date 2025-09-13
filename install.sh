@@ -24,7 +24,7 @@ echo "[+] Installing ${APP_NAME} into ${INSTALL_DIR}"
 if have apt-get; then
   echo "[+] Installing OS packages"
   apt-get update -y
-  apt-get install -y python3 python3-venv python3-pip rsync gpsd gpsd-clients python3-gps rtl-sdr rtl-433
+  apt-get install -y python3 python3-venv python3-pip rsync gpsd gpsd-clients python3-gps rtl-sdr rtl-433 iw wireless-tools net-tools
 fi
 
 # --- Copy app files ---
