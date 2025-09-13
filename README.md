@@ -31,6 +31,28 @@ What install.sh does:
 Access the UI:
  - http://host-or-ip:5000/
 -----------------------------------------------------------------------------
+Dashboard
+<img width="2006" height="1169" alt="dashboard" src="https://github.com/user-attachments/assets/658db454-aad1-40ba-ab80-5c3f2d819fcd" />
+
+Configure
+<img width="1585" height="1215" alt="Config-WIFI" src="https://github.com/user-attachments/assets/45b425b7-0d27-4d46-b960-0690eacf0d38" />
+<img width="1441" height="1144" alt="Config-settings" src="https://github.com/user-attachments/assets/0215e507-1908-4877-b501-e53c615298c1" />
+<img width="1459" height="821" alt="Config-setting-1" src="https://github.com/user-attachments/assets/5cdd3881-3724-43e7-b5d2-4cd502d05eff" />
+
+Files
+<img width="1457" height="740" alt="files" src="https://github.com/user-attachments/assets/11e093c6-bf6a-4fb8-92a1-f7bb1339af8c" />
+
+Remote-Push
+<img width="1199" height="1205" alt="remote-push" src="https://github.com/user-attachments/assets/352a0b00-043a-4d7e-90ea-1f80a5839628" />
+
+Admin
+<img width="1204" height="477" alt="admin" src="https://github.com/user-attachments/assets/ef2725da-fcc3-4387-a41d-180c3590172c" />
+
+
+
+
+
+-----------------------------------------------------------------------------
 Uninstall:
  - sudo systemctl disable --now kismet-webui kismet-push-services
  - sudo rm -f /etc/systemd/system/kismet-webui.service /etc/systemd/system/kismet-push-services.service
