@@ -12,6 +12,11 @@ class ConfigManager:
             '/home/user/.kismet/kismet_site.conf',
             './kismet_site.conf'
         ]
+        # gpsd default configuration locations
+        self.gpsd_paths = [
+            '/etc/default/gpsd',
+            './gpsd'
+        ]
         self.logger = logging.getLogger(__name__)
     
     def load_config(self) -> Dict[str, Any]:
@@ -23,6 +28,8 @@ class ConfigManager:
                 'type': 'disabled',
                 'host': 'localhost',
                 'port': 2947,
+                'remote_host': '0.0.0.0',
+                'remote_port': 4545,
                 'lat': '',
                 'lon': '',
                 'alt': '',
@@ -54,16 +61,49 @@ class ConfigManager:
                     break
                 except Exception as e:
                     self.logger.error(f"Error reading config from {config_path}: {e}")
+
+        # Parse gpsd defaults to determine remote/local settings
+        for gpsd_path in self.gpsd_paths:
+            if os.path.exists(gpsd_path):
+                try:
+                    with open(gpsd_path, 'r') as f:
+                        gpsd_parsed = self._parse_gpsd_defaults(f.read())
+                    config['gps_config'].update(gpsd_parsed)
+                    break
+                except Exception as e:
+                    self.logger.error(f"Error reading gpsd config from {gpsd_path}: {e}")
         
         # Log final state
         self.logger.info(f"Final config: wardrive_mode = {config.get('wardrive_mode', 'NOT SET')}")
         
         return config
+
+    def _parse_gpsd_defaults(self, content: str) -> Dict[str, Any]:
+        """Parse gpsd default configuration"""
+        result: Dict[str, Any] = {}
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('DEVICES='):
+                devices = line.split('=', 1)[1].strip().strip('"')
+                if devices.startswith('udp://'):
+                    result['type'] = 'remote'
+                    addr = devices[6:]
+                    if ':' in addr:
+                        host, port = addr.rsplit(':', 1)
+                        result['remote_host'] = host
+                        try:
+                            result['remote_port'] = int(port)
+                        except ValueError:
+                            pass
+                else:
+                    result['type'] = 'gpsd'
+        return result
     
     def save_config(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Save Kismet configuration"""
         try:
             config_content = self._generate_config_content(config_data)
+            gpsd_content = self._generate_gpsd_defaults(config_data)
             
             # Try to write to the first writable location
             for config_path in self.config_paths:
@@ -79,8 +119,25 @@ class ConfigManager:
                     
                     with open(config_path, 'w') as f:
                         f.write(config_content)
-                    
+
                     self.logger.info(f"Configuration saved to {config_path}")
+
+                    # Save gpsd defaults
+                    for gpsd_path in self.gpsd_paths:
+                        try:
+                            if gpsd_path.startswith('/etc/') and not os.path.exists(os.path.dirname(gpsd_path)):
+                                self.logger.info(f"Skipping {gpsd_path} - parent directory doesn't exist")
+                                continue
+                            with open(gpsd_path, 'w') as gf:
+                                gf.write(gpsd_content)
+                            self.logger.info(f"gpsd defaults saved to {gpsd_path}")
+                            break
+                        except PermissionError:
+                            self.logger.warning(f"Permission denied for {gpsd_path}")
+                            continue
+                        except Exception as e:
+                            self.logger.error(f"Error writing gpsd config to {gpsd_path}: {e}")
+                            continue
                     
                     # If we wrote to a local file but /etc/kismet exists, copy it there too
                     if not config_path.startswith('/etc/') and os.path.exists('/etc/kismet/'):
@@ -128,7 +185,17 @@ class ConfigManager:
         """Parse Kismet configuration file content"""
         config = {
             'data_sources': [],
-            'gps_config': {'enabled': False, 'type': 'disabled', 'host': 'localhost', 'port': 2947, 'lat': '', 'lon': '', 'alt': ''},
+            'gps_config': {
+                'enabled': False,
+                'type': 'disabled',
+                'host': 'localhost',
+                'port': 2947,
+                'remote_host': '0.0.0.0',
+                'remote_port': 4545,
+                'lat': '',
+                'lon': '',
+                'alt': ''
+            },
             'logging_config': {
                 'log_types': ['kismet', 'pcapng'],
                 'log_prefix': '/home/user/kismet',
@@ -446,7 +513,7 @@ class ConfigManager:
         
         # GPS settings
         gps_type = config_data.get('gps_type', 'disabled')
-        if gps_type == 'gpsd':
+        if gps_type in ('gpsd', 'remote'):
             gps_host = config_data.get('gps_host', 'localhost')
             gps_port = config_data.get('gps_port', '2947')
             lines.append(f'gps=gpsd:host={gps_host},port={gps_port}')
@@ -541,6 +608,25 @@ class ConfigManager:
         ])
         
         return '\n'.join(lines)
+
+    def _generate_gpsd_defaults(self, config_data: Dict[str, Any]) -> str:
+        """Generate /etc/default/gpsd content"""
+        gps_type = config_data.get('gps_type', 'disabled')
+        if gps_type == 'remote':
+            host = config_data.get('gps_remote_host', '0.0.0.0')
+            port = config_data.get('gps_remote_port', '4545')
+            devices = f'udp://{host}:{port}'
+        else:
+            devices = '/dev/ttyUSB0 /dev/ttyACM0'
+
+        lines = [
+            'START_DAEMON="true"',
+            'USBAUTO="true"',
+            'GPSD_OPTIONS="-n"',
+            f'DEVICES="{devices}"'
+        ]
+        return '\n'.join(lines) + '\n'
+
     
     def _generate_source_line(self, source: Dict[str, Any]) -> Optional[str]:
         """Generate a Kismet source line from source configuration"""

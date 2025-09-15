@@ -352,14 +352,21 @@
                                         </label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_gpsd" value="gpsd" 
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_gpsd" value="gpsd"
                                                onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type') == 'gpsd' }}>
                                         <label class="form-check-label" for="gps_gpsd">
                                             GPSD Daemon
                                         </label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_virtual" value="virtual" 
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_remote" value="remote"
+                                               onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type') == 'remote' }}>
+                                        <label class="form-check-label" for="gps_remote">
+                                            Remote GPSD
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="gps_type" id="gps_virtual" value="virtual"
                                                onclick="toggleGpsOptions()" {{ 'checked' if current_config.gps_config.get('type') == 'virtual' }}>
                                         <label class="form-check-label" for="gps_virtual">
                                             Virtual GPS (Fixed Location)
@@ -372,16 +379,30 @@
                             <div id="gpsd_config" class="row mb-3" style="display: none;">
                                 <div class="col-md-6">
                                     <label for="gps_host" class="form-label">GPSD Host</label>
-                                    <input type="text" class="form-control" name="gps_host" id="gps_host" 
+                                    <input type="text" class="form-control" name="gps_host" id="gps_host"
                                            value="{{ current_config.gps_config.get('host', 'localhost') }}" placeholder="localhost">
                                 </div>
                                 <div class="col-md-6">
                                     <label for="gps_port" class="form-label">GPSD Port</label>
-                                    <input type="text" class="form-control" name="gps_port" id="gps_port" 
+                                    <input type="text" class="form-control" name="gps_port" id="gps_port"
                                            value="{{ current_config.gps_config.get('port', 2947) }}" placeholder="2947">
                                 </div>
                             </div>
-                            
+
+                            <!-- Remote GPSD Configuration -->
+                            <div id="remote_gps_config" class="row mb-3" style="display: none;">
+                                <div class="col-md-6">
+                                    <label for="gps_remote_host" class="form-label">GPSD listener (use 0.0.0.0 to listen on all interfaces use WG/local IP to listen on one interface)</label>
+                                    <input type="text" class="form-control" name="gps_remote_host" id="gps_remote_host"
+                                           value="{{ current_config.gps_config.get('remote_host', '0.0.0.0') }}" placeholder="0.0.0.0">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="gps_remote_port" class="form-label">GPSD listener Port</label>
+                                    <input type="text" class="form-control" name="gps_remote_port" id="gps_remote_port"
+                                           value="{{ current_config.gps_config.get('remote_port', 4545) }}" placeholder="4545">
+                                </div>
+                            </div>
+
                             <!-- Virtual GPS Configuration -->
                             <div id="virtual_gps_config" class="mb-3" style="display: none;">
                                 <div class="row mb-3">
@@ -1216,15 +1237,19 @@ function toggleGpsOptions() {
     
     // Get config sections
     const gpsdConfig = document.getElementById('gpsd_config');
+    const remoteGpsConfig = document.getElementById('remote_gps_config');
     const virtualGpsConfig = document.getElementById('virtual_gps_config');
     
     // Hide all sections first
     if (gpsdConfig) gpsdConfig.style.display = 'none';
+    if (remoteGpsConfig) remoteGpsConfig.style.display = 'none';
     if (virtualGpsConfig) virtualGpsConfig.style.display = 'none';
     
     // Show appropriate section
     if (selectedType === 'gpsd') {
         if (gpsdConfig) gpsdConfig.style.display = 'flex';
+    } else if (selectedType === 'remote') {
+        if (remoteGpsConfig) remoteGpsConfig.style.display = 'flex';
     } else if (selectedType === 'virtual') {
         if (virtualGpsConfig) virtualGpsConfig.style.display = 'block';
     }
