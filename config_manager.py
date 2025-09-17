@@ -575,7 +575,7 @@ class ConfigManager:
             f"pcapng_log_duplicate_packets={'true' if logging_config.get('pcapng_log_duplicate_packets', True) else 'false'}",
             f"pcapng_log_data_packets={'true' if logging_config.get('pcapng_log_data_packets', True) else 'false'}",
             "",
-            "#Global Channel Hop Rate"
+            "#Global Channel Hop",
             "channel_hop=true",
             "channel_hop_speed=5/sec",
             "",
