@@ -618,7 +618,7 @@ class ConfigManager:
             port = config_data.get('gps_remote_port', '4545')
             devices = f'udp://{host}:{port}'
         else:
-            devices = '/dev/ttyUSB0 /dev/ttyACM0'
+            devices = '/dev/ttyUSB0 /dev/ttyACM0 /dev/ttyUSB1'
 
         lines = [
             'START_DAEMON="true"',
