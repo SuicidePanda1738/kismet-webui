@@ -285,18 +285,18 @@
                                             <div class="col-md-2">
                                                 <label class="form-label">Frequency</label>
                                                 <div class="frequency-input-group">
-                                                    {% set is_custom = source.get('frequency') and source.get('frequency') not in ['433.920MHz', '868.3MHz', '315MHz', '915MHz', 'name=adsb,type=rtladsb', 'name=rtlamr,type=rtlamr'] %}
+                                                    {% set is_custom = source.get('frequency') and source.get('frequency') not in ['433920000', '868300000', '315000000', '915000000', '1090000000', '900000000'] %}
                                                     <select class="form-select frequency-select" name="sdr_frequency" onchange="toggleCustomFrequency(this)"
                                                             style="{{ 'display: none;' if is_custom else '' }}">
-                                                        <option value="433.920MHz" {{ 'selected' if source.get('frequency', '433.920MHz') == '433.920MHz' }}>433.92MHz</option>
-                                                        <option value="868.3MHz" {{ 'selected' if source.get('frequency') == '868.3MHz' }}>868.3MHz</option>
-                                                        <option value="315MHz" {{ 'selected' if source.get('frequency') == '315MHz' }}>315MHz</option>
-                                                        <option value="915MHz" {{ 'selected' if source.get('frequency') == '915MHz' }}>915MHz</option>
-                                                        <option value="name=adsb,type=rtladsb" {{ 'selected' if source.get('frequency') == 'name=adsb,type=rtladsb' }}>ADSB (1090MHz)</option>
-                                                        <option value="name=rtlamr,type=rtlamr" {{ 'selected' if source.get('frequency') == 'name=rtlamr,type=rtlamr' }}>RTL-AMR (900MHz)</option>
+                                                        <option value="433920000" {{ 'selected' if source.get('frequency', '433920000') == '433920000' }}>433.92MHz</option>
+                                                        <option value="868300000" {{ 'selected' if source.get('frequency') == '868300000' }}>868.3MHz</option>
+                                                        <option value="315000000" {{ 'selected' if source.get('frequency') == '315000000' }}>315MHz</option>
+                                                        <option value="915000000" {{ 'selected' if source.get('frequency') == '915000000' }}>915MHz</option>
+                                                        <option value="1090000000" {{ 'selected' if source.get('frequency') == '1090000000' }}>ADSB (1090MHz)</option>
+                                                        <option value="900000000" {{ 'selected' if source.get('frequency') == '900000000' }}>RTL-AMR (900MHz)</option>
                                                         <option value="custom" {{ 'selected' if is_custom }}>Custom</option>
                                                     </select>
-                                                    <input type="text" class="form-control custom-frequency" 
+                                                    <input type="text" class="form-control custom-frequency"
                                                            name="{{ 'sdr_frequency' if is_custom else 'sdr_custom_frequency' }}" 
                                                            value="{{ source.get('frequency', '') if is_custom else '' }}"
                                                            placeholder="e.g., 868MHz" 
@@ -910,15 +910,15 @@ function createSdrSourceRow() {
             <label class="form-label">Frequency</label>
             <div class="frequency-input-group">
                 <select class="form-select frequency-select" name="sdr_frequency" onchange="toggleCustomFrequency(this)">
-                    <option value="433.920MHz" selected>433.92MHz</option>
-                    <option value="868.3MHz">868.3MHz</option>
-                    <option value="315MHz">315MHz</option>
-                    <option value="915MHz">915MHz</option>
-                    <option value="name=adsb,type=rtladsb">ADSB (1090MHz)</option>
-                    <option value="name=rtlamr,type=rtlamr">RTL-AMR (900MHz)</option>
+                    <option value="433920000" selected>433.92MHz</option>
+                    <option value="868300000">868.3MHz</option>
+                    <option value="315000000">315MHz</option>
+                    <option value="915000000">915MHz</option>
+                    <option value="1090000000">ADSB (1090MHz)</option>
+                    <option value="900000000">RTL-AMR (900MHz)</option>
                     <option value="custom">Custom</option>
                 </select>
-                <input type="text" class="form-control custom-frequency" name="sdr_custom_frequency" 
+                <input type="text" class="form-control custom-frequency" name="sdr_custom_frequency"
                        placeholder="e.g., 868MHz" style="display: none;"
                        onblur="revertToFrequencySelect(this)">
             </div>
@@ -1002,7 +1002,7 @@ function revertToFrequencySelect(input) {
         input.style.display = 'none';
         select.name = 'sdr_frequency';
         input.name = 'sdr_custom_frequency';
-        select.value = '433.920MHz'; // Default frequency
+        select.value = '433920000'; // Default frequency
     }
 }
 

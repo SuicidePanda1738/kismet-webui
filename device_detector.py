@@ -222,8 +222,8 @@ class DeviceDetector:
                     'manufacturer': manufacturer,
                     'model': model,
                     'status': 'available',
-                    'default_frequency': '433.920MHz',
-                    'supported_frequencies': ['433MHz', '915MHz', 'Custom']
+                    'default_frequency': '433920000',
+                    'supported_frequencies': ['433920000', '915000000', 'Custom']
                 })
         
         return devices

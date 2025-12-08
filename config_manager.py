@@ -651,9 +651,16 @@ class ConfigManager:
                 # Add type first
                 params.append("type=rtl433")
                 
+                # Normalize frequency into plain Hz to avoid kismet parse errors
+                freq = self._normalize_rtl433_frequency(source.get('frequency', ''))
+                if freq:
+                    params.append(f"channel={freq}")
+                else:
+                    # Fallback to safe default if we can't parse the provided value
+                    self.logger.warning(f"Invalid rtl433 frequency '{source.get('frequency')}' for {interface}, using 433.92MHz")
+                    params.append("channel=433920000")
+                
                 # Add other parameters
-                if source.get('frequency'):
-                    params.append(f"channel={source['frequency']}")
                 if name and name != interface:
                     params.append(f"name={name}")
                 if source.get('gain'):
@@ -738,4 +745,46 @@ class ConfigManager:
                 
         except Exception as e:
             self.logger.error(f"Error generating source line for {source}: {e}")
+            return None
+    
+    def _normalize_rtl433_frequency(self, frequency: str) -> Optional[str]:
+        """Convert rtl433 frequencies like '433.920MHz' or '915M' to Hz strings."""
+        if not frequency:
+            return None
+        
+        try:
+            freq_str = frequency.strip().lower().replace(' ', '')
+            
+            # Quick aliases for common presets
+            aliases = {
+                '433.920mhz': '433920000',
+                '433mhz': '433000000',
+                '315mhz': '315000000',
+                '868.3mhz': '868300000',
+                '915mhz': '915000000',
+                '1090mhz': '1090000000',
+                'adsb': '1090000000',
+                'rtladsb': '1090000000',
+                'rtlamr': '900000000'
+            }
+            if freq_str in aliases:
+                return aliases[freq_str]
+            
+            # Handle values like "433.92m", "433920000", "868300k"
+            match = re.match(r'^([0-9]*\.?[0-9]+)([kmg]?)hz?$', freq_str)
+            if match:
+                value = float(match.group(1))
+                unit = match.group(2)
+                multiplier = {'g': 1e9, 'm': 1e6, 'k': 1e3, '': 1}.get(unit, 1)
+                hz_value = int(value * multiplier)
+                return str(hz_value)
+            
+            # Plain integer string
+            if freq_str.isdigit():
+                return freq_str
+            
+            self.logger.warning(f"Could not parse rtl433 frequency '{frequency}'")
+            return None
+        except Exception as e:
+            self.logger.error(f"Frequency normalization error for '{frequency}': {e}")
             return None

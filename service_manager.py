@@ -240,6 +240,18 @@ class KismetServiceManager:
         except:
             return 0
     
+    def _kill_rtl433(self):
+        """Best-effort cleanup of orphaned rtl_433 processes which can block restarts."""
+        try:
+            cmd = ['pkill', '-f', 'rtl_433']
+            if self.use_sudo:
+                cmd = ['sudo'] + cmd
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode not in (0, 1):  # 1 = nothing matched
+                self.logger.warning(f"pkill rtl_433 returned {result.returncode}: {result.stderr or result.stdout}")
+        except Exception as e:
+            self.logger.warning(f"Could not clean up rtl_433: {e}")
+    
     def start(self):
         """Start Kismet service."""
         try:
@@ -259,7 +271,19 @@ class KismetServiceManager:
     def restart(self):
         """Restart Kismet service."""
         try:
-            self._run_systemctl_command('restart')
+            # Use explicit stop/start with a cleanup hook to prevent stuck rtl_433 processes
+            try:
+                self._run_systemctl_command('stop')
+            except Exception as stop_err:
+                self.logger.warning(f"Ignoring stop error during restart: {stop_err}")
+            
+            # Clean up any orphaned rtl_433 processes which can hold the SDR open
+            self._kill_rtl433()
+            
+            # Small pause to let sockets/devices release
+            time.sleep(0.5)
+            
+            self._run_systemctl_command('start')
             return {'success': True, 'message': 'Kismet service restarted successfully'}
         except Exception as e:
             return {'success': False, 'message': str(e)}
