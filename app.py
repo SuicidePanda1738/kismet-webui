@@ -65,4 +65,4 @@ def internal_error(error):
 
 if __name__ == '__main__':
     # Run the Flask development server when executed directly
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=2502, debug=True)

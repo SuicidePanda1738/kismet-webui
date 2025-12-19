@@ -88,7 +88,7 @@ WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="SESSION_SECRET=${SESSION_SECRET}"
 Environment="DATABASE_URL=sqlite:////${INSTALL_DIR}/instance/kismet_webui.db"
-ExecStart=${VENV_DIR}/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 --access-logfile - --error-logfile - main:app
+ExecStart=${VENV_DIR}/bin/gunicorn --bind 0.0.0.0:2502 --workers 2 --threads 2 --access-logfile - --error-logfile - main:app
 Restart=always
 RestartSec=5
 
@@ -176,4 +176,4 @@ echo
 echo "[?] ${APP_NAME} deployed with MetaGPS."
 echo "    WebUI: sudo systemctl status ${SERVICE_NAME} --no-pager"
 echo "    Push:  sudo systemctl status kismet-push-services --no-pager"
-echo "    URL:   http://<host>:5000/"
+echo "    URL:   http://<host>:2502/"
