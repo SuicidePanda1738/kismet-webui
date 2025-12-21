@@ -24,12 +24,12 @@ What install.sh does:
  - Creates a Python virtual environment and installs Python dependencies
  - Deploys the app to /opt/kismet-webui
  - Creates systemd services:
- - kismet-webui.service (Gunicorn on port 5000)
+ - kismet-webui.service (Gunicorn on port 2502)
  - kismet-push-services.service (push-service supervisor - Pushes kismet data [WiFi & BT] to a remote server)
  - Installs a fork of MetaGPS [enhanced reconnects when service drops in&out] for use with the kismet_cap_linux_wifi
 -----------------------------------------------------------------------------
 Access the UI:
- - http://host-or-ip:5000/
+ - http://host-or-ip:2502/
  - upon first time visiting the webui you will be prompted to set username and password
 -----------------------------------------------------------------------------
 Dashboard
