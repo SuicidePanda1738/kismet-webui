@@ -376,16 +376,53 @@
                             </div>
                             
                             <!-- GPSD Configuration -->
-                            <div id="gpsd_config" class="row mb-3" style="display: none;">
-                                <div class="col-md-6">
-                                    <label for="gps_host" class="form-label">GPSD Host</label>
-                                    <input type="text" class="form-control" name="gps_host" id="gps_host"
-                                           value="{{ current_config.gps_config.get('host', 'localhost') }}" placeholder="localhost">
+                            <div id="gpsd_config" class="mb-3" style="display: none;">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="gps_host" class="form-label">GPSD Host</label>
+                                        <input type="text" class="form-control" name="gps_host" id="gps_host"
+                                               value="{{ current_config.gps_config.get('host', 'localhost') }}" placeholder="localhost">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="gps_port" class="form-label">GPSD Port</label>
+                                        <input type="text" class="form-control" name="gps_port" id="gps_port"
+                                               value="{{ current_config.gps_config.get('port', 2947) }}" placeholder="2947">
+                                    </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="gps_port" class="form-label">GPSD Port</label>
-                                    <input type="text" class="form-control" name="gps_port" id="gps_port"
-                                           value="{{ current_config.gps_config.get('port', 2947) }}" placeholder="2947">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <label class="form-label">GPS Device</label>
+                                        <small class="form-text text-muted d-block mb-2">Select which serial device to use for GPS in /etc/default/gpsd</small>
+                                        {% set current_device = current_config.gps_config.get('device', '/dev/ttyUSB0') %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="gps_device" id="gps_dev_usb0" value="/dev/ttyUSB0"
+                                                   {{ 'checked' if current_device == '/dev/ttyUSB0' }}>
+                                            <label class="form-check-label" for="gps_dev_usb0">
+                                                /dev/ttyUSB0 <small class="text-muted">(Common for USB GPS dongles)</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="gps_device" id="gps_dev_acm0" value="/dev/ttyACM0"
+                                                   {{ 'checked' if current_device == '/dev/ttyACM0' }}>
+                                            <label class="form-check-label" for="gps_dev_acm0">
+                                                /dev/ttyACM0 <small class="text-muted">(Arduino/CDC-ACM devices)</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="gps_device" id="gps_dev_usb1" value="/dev/ttyUSB1"
+                                                   {{ 'checked' if current_device == '/dev/ttyUSB1' }}>
+                                            <label class="form-check-label" for="gps_dev_usb1">
+                                                /dev/ttyUSB1 <small class="text-muted">(Secondary USB serial)</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="gps_device" id="gps_dev_all" value="all"
+                                                   {{ 'checked' if current_device == 'all' or not current_device }}>
+                                            <label class="form-check-label" for="gps_dev_all">
+                                                All devices <small class="text-muted">(/dev/ttyUSB0 /dev/ttyACM0 /dev/ttyUSB1)</small>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

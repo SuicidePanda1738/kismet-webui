@@ -198,6 +198,7 @@ def save_config():
             'gps_type': request.form.get('gps_type', 'disabled'),
             'gps_host': request.form.get('gps_host', 'localhost'),
             'gps_port': request.form.get('gps_port', '2947'),
+            'gps_device': request.form.get('gps_device', 'all'),
             'gps_remote_host': request.form.get('gps_remote_host', '0.0.0.0'),
             'gps_remote_port': request.form.get('gps_remote_port', '4545'),
             'coord_format': request.form.get('coord_format', 'latlon'),

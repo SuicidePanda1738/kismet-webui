@@ -97,6 +97,15 @@ class ConfigManager:
                             pass
                 else:
                     result['type'] = 'gpsd'
+                    # Parse the device(s) from DEVICES line
+                    devices_list = devices.strip().split()
+                    if len(devices_list) == 1:
+                        result['device'] = devices_list[0]
+                    elif len(devices_list) > 1:
+                        # Multiple devices means "all"
+                        result['device'] = 'all'
+                    else:
+                        result['device'] = '/dev/ttyUSB0'
         return result
     
     def save_config(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -618,12 +627,17 @@ class ConfigManager:
             port = config_data.get('gps_remote_port', '4545')
             devices = f'udp://{host}:{port}'
         else:
-            devices = '/dev/ttyUSB0 /dev/ttyACM0 /dev/ttyUSB1'
+            # Get selected GPS device from config
+            gps_device = config_data.get('gps_device', 'all')
+            if gps_device == 'all' or not gps_device:
+                devices = '/dev/ttyUSB0 /dev/ttyACM0 /dev/ttyUSB1'
+            else:
+                devices = gps_device
 
         lines = [
             'START_DAEMON="true"',
             'USBAUTO="true"',
-            'GPSD_OPTIONS="-n"',
+            'GPSD_OPTIONS="-n -b"',
             f'DEVICES="{devices}"'
         ]
         return '\n'.join(lines) + '\n'
