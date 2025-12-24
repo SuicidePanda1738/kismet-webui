@@ -10,7 +10,7 @@ WorkingDirectory=/opt/kismet-webui
 Environment="PATH=/opt/kismet-webui/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="SESSION_SECRET=change-this-to-a-random-secret-key"
 Environment="DATABASE_URL=sqlite:////opt/kismet-webui/instance/kismet_webui.db"
-ExecStart=/opt/kismet-webui/venv/bin/gunicorn --bind 0.0.0.0:5000 --reuse-port --reload --workers 1 main:app
+ExecStart=/opt/kismet-webui/venv/bin/gunicorn --bind 0.0.0.0:2502 --reuse-port --reload --workers 1 main:app
 Restart=always
 RestartSec=10
 
