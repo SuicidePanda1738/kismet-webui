@@ -20,7 +20,8 @@ ALLOWED_EXTENSIONS = (
     '.pcapng',
     '.kismet',
     '.kismet-journal',
-    '.kml'
+    '.kml',
+    '.zip'
 )
 
 def setup():
@@ -520,7 +521,8 @@ def vacuum_logs():
 
         with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for filename in os.listdir(log_dir):
-                if filename == archive_name or not filename.endswith(ALLOWED_EXTENSIONS):
+                # Skip zip files (don't archive archives) and non-allowed extensions
+                if filename.endswith('.zip') or not filename.endswith(ALLOWED_EXTENSIONS):
                     continue
                 file_path = os.path.join(log_dir, filename)
                 if os.path.isfile(file_path):
@@ -835,7 +837,7 @@ def get_recent_files(limit=10):
     return files[:limit]
 
 def get_files_from_directory(directory):
-    """Get files from a specific directory"""
+    """Get files from a specific directory, sorted by modification time (newest first)"""
     files = []
 
     if not os.path.exists(directory):
@@ -852,12 +854,15 @@ def get_files_from_directory(directory):
                     'name': filename,
                     'size': stat.st_size,
                     'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                    'modified_timestamp': stat.st_mtime,  # For sorting
                     'directory': directory,
                     'source': get_directory_source(directory)
                 })
     except PermissionError:
         pass
 
+    # Sort by modification time, newest first
+    files.sort(key=lambda x: x['modified_timestamp'], reverse=True)
     return files
 
 def get_directory_source(directory):
