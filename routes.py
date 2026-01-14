@@ -24,6 +24,10 @@ ALLOWED_EXTENSIONS = (
     '.zip'
 )
 
+def has_allowed_extension(filename):
+    """Check if filename has an allowed extension (case-insensitive)"""
+    return filename.lower().endswith(ALLOWED_EXTENSIONS)
+
 def setup():
     """Initial setup to create the first user"""
     from models import User
@@ -423,7 +427,7 @@ def files():
 def download_file(filename):
     """Download a specific file"""
     try:
-        if not filename.endswith(ALLOWED_EXTENSIONS):
+        if not has_allowed_extension(filename):
             abort(404)
 
         config = config_manager.load_config()
@@ -453,7 +457,7 @@ def delete_file():
     root_dir = os.path.abspath(config.get('logging_config', {}).get('log_prefix', '/home/user/kismet'))
     file_path = os.path.abspath(os.path.join(directory, filename))
 
-    if not file_path.startswith(root_dir) or not filename.endswith(ALLOWED_EXTENSIONS):
+    if not file_path.startswith(root_dir) or not has_allowed_extension(filename):
         flash('Invalid file path', 'error')
         return redirect(url_for('files'))
 
@@ -492,7 +496,7 @@ def delete_all_files():
         if os.path.exists(target_dir):
             deleted_count = 0
             for filename in os.listdir(target_dir):
-                if not filename.endswith(ALLOWED_EXTENSIONS):
+                if not has_allowed_extension(filename):
                     continue
                 file_path = os.path.join(target_dir, filename)
                 if os.path.isfile(file_path):
@@ -522,7 +526,7 @@ def vacuum_logs():
         with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for filename in os.listdir(log_dir):
                 # Skip zip files (don't archive archives) and non-allowed extensions
-                if filename.endswith('.zip') or not filename.endswith(ALLOWED_EXTENSIONS):
+                if filename.lower().endswith('.zip') or not has_allowed_extension(filename):
                     continue
                 file_path = os.path.join(log_dir, filename)
                 if os.path.isfile(file_path):
@@ -819,7 +823,7 @@ def get_recent_files(limit=10):
     if os.path.exists(directory):
         try:
             for filename in os.listdir(directory):
-                if not filename.endswith(ALLOWED_EXTENSIONS):
+                if not has_allowed_extension(filename):
                     continue
                 file_path = os.path.join(directory, filename)
                 if os.path.isfile(file_path):
@@ -845,7 +849,7 @@ def get_files_from_directory(directory):
 
     try:
         for filename in os.listdir(directory):
-            if not filename.endswith(ALLOWED_EXTENSIONS):
+            if not has_allowed_extension(filename):
                 continue
             file_path = os.path.join(directory, filename)
             if os.path.isfile(file_path):

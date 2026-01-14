@@ -7,7 +7,7 @@ from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 class Base(DeclarativeBase):
     pass
@@ -16,7 +16,15 @@ db = SQLAlchemy(model_class=Base)
 
 # Create the app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "kismet-web-interface-secret-key")
+
+# Require SESSION_SECRET environment variable - no insecure fallback
+session_secret = os.environ.get("SESSION_SECRET")
+if not session_secret or session_secret == "change-this-to-a-random-secret-key":
+    raise RuntimeError(
+        "SESSION_SECRET environment variable must be set to a secure random value. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.secret_key = session_secret
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure the database
