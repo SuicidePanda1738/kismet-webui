@@ -137,7 +137,15 @@
                     {% endif %}
                     
                     <hr class="my-3">
-                    
+
+                    <!-- GPSD Control -->
+                    <a href="{{ url_for('gpsd_restart') }}" class="btn btn-outline-info">
+                        <i data-feather="navigation" class="me-2"></i>
+                        Restart GPSD
+                    </a>
+
+                    <hr class="my-3">
+
                     <!-- System Control Buttons -->
                     <button type="button" class="btn btn-warning" onclick="confirmSystemRestart()">
                         <i data-feather="rotate-cw" class="me-2"></i>

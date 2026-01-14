@@ -323,6 +323,35 @@ def service_control(action):
     
     return redirect(url_for('index'))
 
+@app.route('/gpsd/restart')
+@login_required
+def gpsd_restart():
+    """Restart GPSD service"""
+    import subprocess
+
+    try:
+        app.logger.info("GPSD restart requested")
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'gpsd'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            flash('GPSD service restarted successfully', 'success')
+        else:
+            error_msg = result.stderr.strip() if result.stderr else 'Unknown error'
+            flash(f'Failed to restart GPSD: {error_msg}', 'error')
+
+    except subprocess.TimeoutExpired:
+        flash('GPSD restart timed out', 'error')
+    except Exception as e:
+        app.logger.error(f"GPSD restart error: {e}")
+        flash(f'GPSD restart error: {str(e)}', 'error')
+
+    return redirect(url_for('index'))
+
 @app.route('/system/<action>')
 @login_required
 def system_control(action):
