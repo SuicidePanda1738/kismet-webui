@@ -47,19 +47,13 @@ python3 -m venv "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
 pip install --upgrade pip wheel
 
-cat > "${INSTALL_DIR}/requirements.txt" <<'EOF'
-flask==3.0.0
-flask-login==0.6.3
-flask-sqlalchemy==3.1.1
-gunicorn==21.2.0
-psycopg2-binary==2.9.9
-werkzeug==3.0.0
-email-validator==2.1.0
-sqlalchemy==2.0.23
-mgrs==1.4.5
-EOF
-
-pip install -r "${INSTALL_DIR}/requirements.txt"
+# Install from requirements-deploy.txt — the single source of truth for the
+# app's Python dependencies. (Previously this list was duplicated inline here,
+# which silently drifted and shipped without flask-wtf / cryptography.)
+if [[ ! -f "${INSTALL_DIR}/requirements-deploy.txt" ]]; then
+  die "requirements-deploy.txt not found in ${INSTALL_DIR}"
+fi
+pip install -r "${INSTALL_DIR}/requirements-deploy.txt"
 deactivate
 
 # --- Permissions ---
@@ -152,7 +146,7 @@ if [[ -d /etc/default ]]; then
   cat > /etc/default/gpsd <<'EOF2'
 START_DAEMON="true"
 USBAUTO="true"
-DEVICES="/dev/ttyACM0 /dev/ttyUSB0"
+DEVICES="/dev/ttyACM0"
 GPSD_OPTIONS="-n -b"
 EOF2
   systemctl enable gpsd || true

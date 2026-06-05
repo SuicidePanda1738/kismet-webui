@@ -3,6 +3,7 @@ import logging
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -27,6 +28,10 @@ if not session_secret or session_secret == "change-this-to-a-random-secret-key":
 app.secret_key = session_secret
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
+# Enable CSRF protection for all state-changing (POST/PUT/PATCH/DELETE) requests.
+# Templates include {{ csrf_token() }} in forms; AJAX sends the X-CSRFToken header.
+csrf = CSRFProtect(app)
+
 # Configure the database
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///kismet.db")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
@@ -45,7 +50,7 @@ login_manager.init_app(app)
 @login_manager.user_loader
 def load_user(user_id):
     from models import User
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 with app.app_context():
     # Import models first, then create tables
@@ -72,5 +77,7 @@ def internal_error(error):
     return "Internal server error", 500
 
 if __name__ == '__main__':
-    # Run the Flask development server when executed directly
-    app.run(host='0.0.0.0', port=2502, debug=True)
+    # Run the Flask development server when executed directly.
+    # debug must stay False: debug=True exposes the Werkzeug interactive
+    # debugger (arbitrary code execution) to anyone who can reach the port.
+    app.run(host='0.0.0.0', port=2502, debug=False)

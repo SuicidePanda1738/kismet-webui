@@ -1,7 +1,10 @@
 import os
 import json
+import time
+import threading
 import subprocess
 import zipfile
+from collections import defaultdict
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, flash, jsonify, send_file, abort
 from flask_login import login_user, logout_user, login_required, current_user
@@ -27,6 +30,34 @@ ALLOWED_EXTENSIONS = (
 def has_allowed_extension(filename):
     """Check if filename has an allowed extension (case-insensitive)"""
     return filename.lower().endswith(ALLOWED_EXTENSIONS)
+
+# --- Login brute-force throttling (in-process, per client IP) ---
+# Note: state is per worker process; with multiple gunicorn workers the
+# effective limit scales with the worker count, which is still an adequate
+# barrier for a single-appliance deployment.
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300
+_login_attempts = defaultdict(list)  # client IP -> list[float timestamps]
+_login_lock = threading.Lock()
+
+
+def _login_rate_limited(ip):
+    """Return True if this IP has exceeded the failed-login threshold."""
+    now = time.time()
+    with _login_lock:
+        recent = [t for t in _login_attempts[ip] if now - t < LOGIN_WINDOW_SECONDS]
+        _login_attempts[ip] = recent
+        return len(recent) >= LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(ip):
+    with _login_lock:
+        _login_attempts[ip].append(time.time())
+
+
+def _reset_login_attempts(ip):
+    with _login_lock:
+        _login_attempts.pop(ip, None)
 
 def setup():
     """Initial setup to create the first user"""
@@ -58,18 +89,25 @@ def login():
     if User.query.first() is None:
         return redirect(url_for('setup'))
     if request.method == 'POST':
+        ip = request.remote_addr or 'unknown'
+        if _login_rate_limited(ip):
+            flash('Too many failed login attempts. Please wait a few minutes and try again.', 'error')
+            return render_template('login.html'), 429
+
         username = request.form.get('username')
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
+            _reset_login_attempts(ip)
             login_user(user)
             flash('Logged in successfully.', 'success')
             return redirect(url_for('index'))
+        _record_failed_login(ip)
         flash('Invalid username or password.', 'error')
     return render_template('login.html')
 
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
@@ -293,7 +331,7 @@ def api_detect_devices():
         app.logger.error(f"Device detection error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/service/<action>')
+@app.route('/service/<action>', methods=['POST'])
 @login_required
 def service_control(action):
     """Control Kismet service"""
@@ -323,7 +361,7 @@ def service_control(action):
     
     return redirect(url_for('index'))
 
-@app.route('/gpsd/restart')
+@app.route('/gpsd/restart', methods=['POST'])
 @login_required
 def gpsd_restart():
     """Restart GPSD service"""
@@ -352,7 +390,7 @@ def gpsd_restart():
 
     return redirect(url_for('index'))
 
-@app.route('/system/<action>')
+@app.route('/system/<action>', methods=['POST'])
 @login_required
 def system_control(action):
     """Control system (device shutdown/restart)"""
@@ -372,9 +410,9 @@ def system_control(action):
             
             if os.geteuid() == 0:  # Running as root
                 app.logger.warning("Initiating system shutdown as root user")
-                flash('System shutdown initiated. The device will power off in 10 seconds.', 'warning')
-                # Give time for the response to be sent before shutdown
-                subprocess.Popen(['nohup', 'sh', '-c', 'sleep 2 && shutdown -h now'], 
+                flash('System shutdown initiated. The device will power off shortly.', 'warning')
+                # Detached, no shell: argv is a fixed list so there is no injection surface.
+                subprocess.Popen(['shutdown', '-h', 'now'],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             else:
                 # Try with sudo (passwordless sudo required)
@@ -382,8 +420,8 @@ def system_control(action):
                     # Test if sudo is available without password
                     subprocess.run(['sudo', '-n', 'true'], check=True, capture_output=True)
                     app.logger.warning(f"Initiating system shutdown as {current_user} with sudo")
-                    flash('System shutdown initiated. The device will power off in 10 seconds.', 'warning')
-                    subprocess.Popen(['sudo', 'nohup', 'sh', '-c', 'sleep 2 && shutdown -h now'], 
+                    flash('System shutdown initiated. The device will power off shortly.', 'warning')
+                    subprocess.Popen(['sudo', 'shutdown', '-h', 'now'],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 except subprocess.CalledProcessError:
                     app.logger.error(f"Failed to shutdown - insufficient privileges for user {current_user}")
@@ -398,9 +436,9 @@ def system_control(action):
             
             if os.geteuid() == 0:  # Running as root
                 app.logger.warning("Initiating system restart as root user")
-                flash('System restart initiated. The device will reboot in 10 seconds.', 'warning')
-                # Give time for the response to be sent before reboot
-                subprocess.Popen(['nohup', 'sh', '-c', 'sleep 2 && shutdown -r now'], 
+                flash('System restart initiated. The device will reboot shortly.', 'warning')
+                # Detached, no shell: argv is a fixed list so there is no injection surface.
+                subprocess.Popen(['shutdown', '-r', 'now'],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             else:
                 # Try with sudo (passwordless sudo required)
@@ -408,8 +446,8 @@ def system_control(action):
                     # Test if sudo is available without password
                     subprocess.run(['sudo', '-n', 'true'], check=True, capture_output=True)
                     app.logger.warning(f"Initiating system restart as {current_user} with sudo")
-                    flash('System restart initiated. The device will reboot in 10 seconds.', 'warning')
-                    subprocess.Popen(['sudo', 'nohup', 'sh', '-c', 'sleep 2 && shutdown -r now'], 
+                    flash('System restart initiated. The device will reboot shortly.', 'warning')
+                    subprocess.Popen(['sudo', 'shutdown', '-r', 'now'],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 except subprocess.CalledProcessError:
                     app.logger.error(f"Failed to restart - insufficient privileges for user {current_user}")
@@ -591,33 +629,47 @@ def create_wifi_push():
     """Create WiFi push service"""
     try:
         from models import PushService
-        from push_service_manager import push_service_manager
-        
-        name = f"kismet-wifi-push-{request.form.get('wifi_sensor')}"
-        
+        from push_service_manager import (
+            push_service_manager,
+            validate_service_name,
+            validate_service_fields,
+            ServiceValidationError,
+        )
+
+        sensor = (request.form.get('wifi_sensor') or '').strip()
+        name = f"kismet-wifi-push-{sensor}"
+        service_data = {
+            'name': name,
+            'service_type': 'WiFi',
+            'adapter': (request.form.get('wifi_adapter') or '').strip(),
+            'sensor': sensor,
+            'kismet_ip': (request.form.get('kismet_ip') or '').strip(),
+            'api_key': (request.form.get('api_key') or '').strip(),
+            'gps_api_key': (request.form.get('gps_api_key') or '').strip(),
+        }
+
+        # Validate all user input BEFORE writing to the database or filesystem.
+        try:
+            validate_service_name(name)
+            validate_service_fields(service_data)
+        except ServiceValidationError as ve:
+            flash(f'Invalid input: {ve}', 'error')
+            return redirect(url_for('remote_push'))
+
         # Create database entry
         service = PushService()
         service.name = name
         service.service_type = 'WiFi + GPS'
-        service.adapter = request.form.get('wifi_adapter')
-        service.sensor = request.form.get('wifi_sensor')
-        service.kismet_ip = request.form.get('kismet_ip')
-        service.api_key = request.form.get('api_key')
-        service.gps_api_key = request.form.get('gps_api_key')
-        
+        service.adapter = service_data['adapter']
+        service.sensor = service_data['sensor']
+        service.kismet_ip = service_data['kismet_ip']
+        service.api_key = service_data['api_key']
+        service.gps_api_key = service_data['gps_api_key']
+
         db.session.add(service)
         db.session.commit()
-        
+
         # Create the actual service script
-        service_data = {
-            'name': name,
-            'service_type': 'WiFi',
-            'adapter': service.adapter,
-            'sensor': service.sensor,
-            'kismet_ip': service.kismet_ip,
-            'api_key': service.api_key,
-            'gps_api_key': service.gps_api_key
-        }
         push_service_manager.create_push_service_script(service_data)
         
         # Start the service
@@ -641,31 +693,47 @@ def create_bluetooth_push():
     """Create Bluetooth push service"""
     try:
         from models import PushService
-        from push_service_manager import push_service_manager
-        
-        name = f"kismet-bt-push-{request.form.get('bt_sensor')}"
-        
-        # Create database entry
-        service = PushService()
-        service.name = name
-        service.service_type = 'Bluetooth'
-        service.adapter = request.form.get('bt_device')
-        service.sensor = request.form.get('bt_sensor')
-        service.kismet_ip = request.form.get('kismet_ip')
-        service.api_key = request.form.get('api_key')
-        
-        db.session.add(service)
-        db.session.commit()
-        
-        # Create the actual service script
+        from push_service_manager import (
+            push_service_manager,
+            validate_service_name,
+            validate_service_fields,
+            ServiceValidationError,
+        )
+
+        sensor = (request.form.get('bt_sensor') or '').strip()
+        name = f"kismet-bt-push-{sensor}"
         service_data = {
             'name': name,
             'service_type': 'Bluetooth',
-            'adapter': service.adapter,
-            'sensor': service.sensor,
-            'kismet_ip': service.kismet_ip,
-            'api_key': service.api_key
+            'adapter': (request.form.get('bt_device') or '').strip(),
+            'sensor': sensor,
+            'kismet_ip': (request.form.get('kismet_ip') or '').strip(),
+            'api_key': (request.form.get('api_key') or '').strip(),
+            'gps_api_key': (request.form.get('gps_api_key') or '').strip(),
         }
+
+        # Validate all user input BEFORE writing to the database or filesystem.
+        try:
+            validate_service_name(name)
+            validate_service_fields(service_data)
+        except ServiceValidationError as ve:
+            flash(f'Invalid input: {ve}', 'error')
+            return redirect(url_for('remote_push'))
+
+        # Create database entry
+        service = PushService()
+        service.name = name
+        service.service_type = 'Bluetooth + GPS' if service_data['gps_api_key'] else 'Bluetooth'
+        service.adapter = service_data['adapter']
+        service.sensor = service_data['sensor']
+        service.kismet_ip = service_data['kismet_ip']
+        service.api_key = service_data['api_key']
+        service.gps_api_key = service_data['gps_api_key']
+
+        db.session.add(service)
+        db.session.commit()
+
+        # Create the actual service script
         push_service_manager.create_push_service_script(service_data)
         
         # Start the service
@@ -741,7 +809,17 @@ def control_push_service():
                 flash(f'Service {service_name} restarted successfully', 'success')
             else:
                 flash(f'Failed to restart service: {result["message"]}', 'error')
-                
+
+        elif action == 'enable':
+            service.enabled = True
+            db.session.commit()
+            flash(f'Service {service_name} enabled (will auto-start on boot)', 'success')
+
+        elif action == 'disable':
+            service.enabled = False
+            db.session.commit()
+            flash(f'Service {service_name} disabled (will not auto-start on boot)', 'success')
+
     except Exception as e:
         app.logger.error(f"Push service control error: {e}")
         flash(f'Error controlling service: {str(e)}', 'error')
@@ -753,27 +831,28 @@ def control_push_service():
 def remove_push_service():
     """Remove push service"""
     service_name = request.form.get('service_name')
-    
+
     try:
         from models import PushService
-        from push_service_manager import push_service_manager
-        import os
-        
+        from push_service_manager import (
+            push_service_manager,
+            validate_service_name,
+            ServiceValidationError,
+        )
+
+        # Reject crafted names before they reach the filesystem.
+        try:
+            validate_service_name(service_name)
+        except ServiceValidationError as ve:
+            flash(f'Invalid service name: {ve}', 'error')
+            return redirect(url_for('remote_push'))
+
         # Stop the service first
         push_service_manager.stop_push_service(service_name)
-        
-        # Remove the script file
-        script_file = f"push_services/{service_name}.sh"
-        if os.path.exists(script_file):
-            os.remove(script_file)
-            app.logger.info(f"Removed script file: {script_file}")
-        
-        # Remove the PID file if it exists
-        pid_file = f"push_services/{service_name}.pid"
-        if os.path.exists(pid_file):
-            os.remove(pid_file)
-            app.logger.info(f"Removed PID file: {pid_file}")
-        
+
+        # Remove the generated script and PID files (path-constrained)
+        push_service_manager.remove_service_files(service_name)
+
         # Remove from database
         service = PushService.query.filter_by(name=service_name).first()
         if service:

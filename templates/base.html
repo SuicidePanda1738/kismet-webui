@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Kismet Web Interface{% endblock %}</title>
     
     <!-- Bootstrap CSS (local for offline use) -->
@@ -70,10 +71,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logout') }}">
-                            <i data-feather="log-out" class="me-1"></i>
-                            Logout
-                        </a>
+                        <form method="POST" action="{{ url_for('logout') }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="nav-link btn btn-link border-0 bg-transparent">
+                                <i data-feather="log-out" class="me-1"></i>
+                                Logout
+                            </button>
+                        </form>
                     </li>
                     {% else %}
                     <li class="nav-item">

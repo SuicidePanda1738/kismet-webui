@@ -16,7 +16,13 @@ class KismetServiceManager:
         self.systemctl_path = self._find_systemctl()
         self.use_sudo = self._needs_sudo()
         self.service_available = self._check_service_exists()
-        
+        # Cache get_status() briefly: it shells out to systemctl twice
+        # (status + is-enabled, 30s timeout each) on every dashboard/system-info
+        # load. Invalidated whenever a state-changing systemctl action runs.
+        self._status_cache = None
+        self._status_cache_time = 0.0
+        self._STATUS_TTL = 10  # seconds
+
     def _find_systemctl(self):
         """Find systemctl binary path."""
         systemctl_paths = [
@@ -69,6 +75,10 @@ class KismetServiceManager:
     
     def _run_systemctl_command(self, action, check_output=False):
         """Run a systemctl command with proper error handling and privilege escalation."""
+        # Any state-changing action makes a cached status immediately stale.
+        if action in ('start', 'stop', 'enable', 'disable'):
+            self._status_cache = None
+
         if not self.systemctl_path:
             raise Exception("systemctl not found - systemd is not available on this system")
             
@@ -104,7 +114,19 @@ class KismetServiceManager:
                 raise Exception("sudo not found - cannot escalate privileges for systemctl")
             raise Exception(f"Command not found: {e}")
     
-    def get_status(self):
+    def get_status(self, force_refresh=False):
+        """Return service status, served from a short-lived cache so quick page
+        reloads don't repeat the (potentially blocking) systemctl calls."""
+        now = time.monotonic()
+        if (not force_refresh and self._status_cache is not None
+                and (now - self._status_cache_time) < self._STATUS_TTL):
+            return self._status_cache
+        status = self._compute_status()
+        self._status_cache = status
+        self._status_cache_time = now
+        return status
+
+    def _compute_status(self):
         """Get current service status from systemctl with comprehensive error handling."""
         # Check system availability first
         if not self.systemctl_path:
