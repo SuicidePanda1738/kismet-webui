@@ -1,8 +1,28 @@
 from app import db
 from datetime import datetime
 from sqlalchemy import JSON
+from sqlalchemy.types import TypeDecorator, String
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from crypto_utils import encrypt_value, decrypt_value
+
+
+class EncryptedString(TypeDecorator):
+    """A String column whose value is transparently encrypted at rest.
+
+    Plaintext is encrypted on write and decrypted on read, so application code
+    keeps using the attribute as an ordinary string. Legacy plaintext rows are
+    returned unchanged and re-encrypted the next time they are written.
+    """
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_value(value)
+
+    def process_result_value(self, value, dialect):
+        return decrypt_value(value)
 
 class KismetConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -32,7 +52,8 @@ class PushService(db.Model):
     adapter = db.Column(db.String(50), nullable=False)
     sensor = db.Column(db.String(100), nullable=False)
     kismet_ip = db.Column(db.String(45), nullable=False)
-    api_key = db.Column(db.String(200), nullable=False)
-    gps_api_key = db.Column(db.String(200), nullable=True)
+    api_key = db.Column(EncryptedString(512), nullable=False)
+    gps_api_key = db.Column(EncryptedString(512), nullable=True)
     status = db.Column(db.String(20), default='inactive')
+    enabled = db.Column(db.Boolean, default=True, nullable=False)  # auto-start on boot
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

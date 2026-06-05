@@ -5,12 +5,55 @@ Creates and manages shell scripts which run the Kismet remote capture tools.
 """
 
 import os
+import re
 import sys
 import json
 import logging
 import subprocess
 from pathlib import Path
 from typing import Dict
+
+
+class ServiceValidationError(ValueError):
+    """Raised when a service name or field fails its whitelist validation."""
+
+
+# A service name is also used to build file paths, so it must be both
+# filesystem-safe (no path separators / traversal) and shell-safe.
+_SERVICE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Per-field whitelists. Every one of these values gets interpolated into a
+# root-owned bash script, so anything outside these character classes is
+# rejected up front rather than escaped.
+_FIELD_PATTERNS = {
+    "adapter": re.compile(r"^[A-Za-z0-9_-]{1,32}$"),       # wlan0, wlan0mon, hci0
+    "sensor": re.compile(r"^[A-Za-z0-9_-]{1,64}$"),        # sensor identifier
+    "kismet_ip": re.compile(r"^[A-Za-z0-9._:-]{1,255}$"),  # IPv4/IPv6/hostname
+    "api_key": re.compile(r"^[A-Za-z0-9_-]{0,128}$"),      # Kismet API token
+    "gps_api_key": re.compile(r"^[A-Za-z0-9_-]{0,128}$"),  # optional GPS token
+}
+
+
+def validate_service_name(name: str) -> str:
+    """Return ``name`` if it is a safe service identifier, else raise."""
+    if not name or not _SERVICE_NAME_RE.match(name):
+        raise ServiceValidationError(
+            "Invalid service name. Use only letters, numbers, hyphens and underscores."
+        )
+    return name
+
+
+def validate_service_fields(service_data: Dict) -> None:
+    """Validate user-supplied push-service fields against strict whitelists."""
+    for field, pattern in _FIELD_PATTERNS.items():
+        value = service_data.get(field)
+        if value is None:
+            value = ""
+        if not pattern.match(value):
+            raise ServiceValidationError(
+                f"Invalid value for '{field}'. Allowed characters: "
+                "letters, numbers, and for the host also dot/colon/hyphen."
+            )
 
 
 class PushServiceManager:
@@ -23,6 +66,15 @@ class PushServiceManager:
         # Directory to hold generated scripts and PID/log files
         self.service_dir = self.base_dir / "push_services"
         self.service_dir.mkdir(parents=True, exist_ok=True)
+
+    def _service_file(self, name: str, suffix: str) -> Path:
+        """Validate ``name`` and return a path that is guaranteed to live
+        inside ``service_dir`` (defense in depth against path traversal)."""
+        validate_service_name(name)
+        path = (self.service_dir / f"{name}{suffix}").resolve()
+        if not path.is_relative_to(self.service_dir.resolve()):
+            raise ServiceValidationError(f"Resolved path escapes service directory: {name!r}")
+        return path
 
     # -----------------------------
     # Public: create service script
@@ -41,6 +93,13 @@ class PushServiceManager:
         """
         name = service_data["name"]
         s_type = service_data["service_type"]
+
+        # Reject anything that isn't a strict whitelist match BEFORE it can be
+        # interpolated into the root-owned script (prevents shell injection)
+        # or used to build a file path (prevents path traversal).
+        validate_service_name(name)
+        validate_service_fields(service_data)
+
         adapter = service_data["adapter"]
         sensor = service_data["sensor"]
         host = service_data["kismet_ip"]
@@ -162,10 +221,17 @@ while true; do
 done
 """
         elif s_type == "Bluetooth":
-            # Bluetooth script
+            # Bluetooth script (with optional MetaGPSD)
             body = r"""
 # Build kismet_cap_linux_bluetooth command
-CMD="kismet_cap_linux_bluetooth --connect ${REMOTE_HOST}:2501 --source=${ADAPTER}:name=${SENSOR_NAME}"
+CMD="kismet_cap_linux_bluetooth --connect ${REMOTE_HOST}:2501"
+
+if [[ -n "${GPS_API_KEY}" ]]; then
+  # include metagps in data-source name
+  CMD="${CMD} --source=${ADAPTER}:name=${SENSOR_NAME},metagps=${SENSOR_NAME}"
+else
+  CMD="${CMD} --source=${ADAPTER}:name=${SENSOR_NAME}"
+fi
 
 if [[ -n "${API_KEY}" ]]; then
   CMD="${CMD} --apikey=${API_KEY}"
@@ -174,7 +240,35 @@ fi
 echo "Command: ${CMD}" | tee -a "$LOG_FILE"
 
 while true; do
-  bash -c "${CMD}" >>"$LOG_FILE" 2>&1
+  # Start Bluetooth capture
+  bash -c "${CMD}" >>"$LOG_FILE" 2>&1 &
+  BT_PID=$!
+
+  # Start MetaGPSD if requested
+  if [[ -n "${GPS_API_KEY}" ]]; then
+    wait_for_gpsd
+    if [[ -x "/opt/metagps/venv/bin/python" && -f "/opt/metagps/metagpsd.py" ]]; then
+      echo "Starting MetaGPSD..." | tee -a "$LOG_FILE"
+      /opt/metagps/venv/bin/python /opt/metagps/metagpsd.py \
+        --connect "${REMOTE_HOST}:2501" \
+        --metagps "${SENSOR_NAME}" \
+        --apikey  "${GPS_API_KEY}" >>"$LOG_FILE" 2>&1 &
+      GPS_PID=$!
+    else
+      echo "MetaGPSD not installed; skipping GPS attachment" | tee -a "$LOG_FILE"
+      GPS_PID=""
+    fi
+  else
+    GPS_PID=""
+  fi
+
+  wait $BT_PID || true
+
+  # stop gps sidecar if running
+  if [[ -n "${GPS_API_KEY}" && -n "${GPS_PID}" ]]; then
+    kill "${GPS_PID}" 2>/dev/null || true
+  fi
+
   echo "Bluetooth capture exited, restarting in 5s..." | tee -a "$LOG_FILE"
   sleep 5
 done
@@ -182,7 +276,7 @@ done
         else:
             raise ValueError(f"Unknown service type: {s_type}")
 
-        script_path = self.service_dir / f"{name}.sh"
+        script_path = self._service_file(name, ".sh")
         script_path.write_text(prologue + body)
         script_path.chmod(0o755)
         self.logger.info("Created push service script: %s", script_path)
@@ -194,11 +288,11 @@ done
     def start_push_service(self, service_name: str) -> Dict[str, str]:
         """Start a push service in the background, recording its PID."""
         try:
-            script_path = self.service_dir / f"{service_name}.sh"
+            script_path = self._service_file(service_name, ".sh")
             if not script_path.exists():
                 return {"success": False, "message": f"Script not found: {script_path}"}
 
-            pid_file = self.service_dir / f"{service_name}.pid"
+            pid_file = self._service_file(service_name, ".pid")
             if pid_file.exists():
                 try:
                     old = int(pid_file.read_text().strip())
@@ -226,7 +320,7 @@ done
     def stop_push_service(self, service_name: str) -> Dict[str, str]:
         """Stop a push service via its recorded PID (kills the whole process group)."""
         try:
-            pid_file = self.service_dir / f"{service_name}.pid"
+            pid_file = self._service_file(service_name, ".pid")
             if not pid_file.exists():
                 return {"success": False, "message": f"{service_name} is not running"}
 
@@ -247,13 +341,25 @@ done
         self.stop_push_service(service_name)
         return self.start_push_service(service_name)
 
+    def remove_service_files(self, service_name: str) -> None:
+        """Remove the .sh and .pid files for a service.
+
+        The name is validated and the resolved paths are constrained to the
+        service directory, so a crafted name cannot delete files elsewhere.
+        """
+        for suffix in (".sh", ".pid"):
+            path = self._service_file(service_name, suffix)
+            if path.exists():
+                path.unlink()
+                self.logger.info("Removed %s", path)
+
     # -----------------------------
     # Public: status/cleanup
     # -----------------------------
     def get_service_status(self, service_name: str) -> str:
         """Return 'running' | 'stopped' | 'unknown'."""
         try:
-            pid_file = self.service_dir / f"{service_name}.pid"
+            pid_file = self._service_file(service_name, ".pid")
             if not pid_file.exists():
                 return "stopped"
             pid = int(pid_file.read_text().strip())

@@ -17,6 +17,7 @@
             Refresh
           </button>
           <form method="POST" action="{{ url_for('vacuum_logs') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline-warning"
                     onclick="return confirm('Create a zip archive of all files in the logs directory?')">
               <i data-feather="archive" class="me-1"></i>
@@ -120,6 +121,7 @@
                     <form method="POST" action="{{ url_for('delete_file') }}"
                           onsubmit="return confirm('Delete {{ file.name }}? This cannot be undone.');"
                           style="margin:0;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <input type="hidden" name="filename" value="{{ file.name }}">
                       <input type="hidden" name="directory" value="{{ file.directory }}">
                       <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
@@ -224,6 +226,7 @@
 <div class="modal fade" id="deleteAllModal" tabindex="-1" aria-labelledby="deleteAllModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <form method="POST" action="{{ url_for('delete_all_files') }}" class="modal-content" onsubmit="return confirmBulkDelete();">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-header">
         <h5 class="modal-title" id="deleteAllModalLabel">
           <i data-feather="trash-2" class="me-2"></i>
@@ -355,6 +358,7 @@ function convertToKML(filename, directory) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
             },
             body: JSON.stringify({
                 filename: filename,

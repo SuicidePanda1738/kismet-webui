@@ -1,0 +1,21 @@
+# Local Claude Code configuration — kept out of version control
+CLAUDE.md
+.claude/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+env/
+.smoke_venv/
+
+# Flask instance folder (local SQLite DB, etc.)
+instance/
+
+# Runtime-generated push service files (regenerated from the DB at runtime)
+push_services/*.sh
+push_services/*.pid
+push_services/*.log

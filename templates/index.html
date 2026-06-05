@@ -107,42 +107,60 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {% if service_status.status == 'running' %}
-                    <a href="{{ url_for('service_control', action='stop') }}" class="btn btn-outline-danger">
-                        <i data-feather="stop-circle" class="me-2"></i>
-                        Stop Service
-                    </a>
-                    <a href="{{ url_for('service_control', action='restart') }}" class="btn btn-outline-warning">
-                        <i data-feather="refresh-cw" class="me-2"></i>
-                        Restart Service
-                    </a>
+                    <form method="POST" action="{{ url_for('service_control', action='stop') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i data-feather="stop-circle" class="me-2"></i>
+                            Stop Service
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('service_control', action='restart') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-warning">
+                            <i data-feather="refresh-cw" class="me-2"></i>
+                            Restart Service
+                        </button>
+                    </form>
                     {% else %}
-                    <a href="{{ url_for('service_control', action='start') }}" class="btn btn-outline-success">
-                        <i data-feather="play-circle" class="me-2"></i>
-                        Start Service
-                    </a>
+                    <form method="POST" action="{{ url_for('service_control', action='start') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-success">
+                            <i data-feather="play-circle" class="me-2"></i>
+                            Start Service
+                        </button>
+                    </form>
                     {% endif %}
-                    
+
                     <hr>
-                    
+
                     {% if service_status.enabled %}
-                    <a href="{{ url_for('service_control', action='disable') }}" class="btn btn-outline-secondary">
-                        <i data-feather="x-circle" class="me-2"></i>
-                        Disable Auto-Start
-                    </a>
+                    <form method="POST" action="{{ url_for('service_control', action='disable') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i data-feather="x-circle" class="me-2"></i>
+                            Disable Auto-Start
+                        </button>
+                    </form>
                     {% else %}
-                    <a href="{{ url_for('service_control', action='enable') }}" class="btn btn-outline-info">
-                        <i data-feather="check-circle" class="me-2"></i>
-                        Enable Auto-Start
-                    </a>
+                    <form method="POST" action="{{ url_for('service_control', action='enable') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-info">
+                            <i data-feather="check-circle" class="me-2"></i>
+                            Enable Auto-Start
+                        </button>
+                    </form>
                     {% endif %}
-                    
+
                     <hr class="my-3">
 
                     <!-- GPSD Control -->
-                    <a href="{{ url_for('gpsd_restart') }}" class="btn btn-outline-info">
-                        <i data-feather="navigation" class="me-2"></i>
-                        Restart GPSD
-                    </a>
+                    <form method="POST" action="{{ url_for('gpsd_restart') }}" class="d-grid m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-info">
+                            <i data-feather="navigation" class="me-2"></i>
+                            Restart GPSD
+                        </button>
+                    </form>
 
                     <hr class="my-3">
 
@@ -155,6 +173,14 @@
                         <i data-feather="power" class="me-2"></i>
                         Shutdown Device
                     </button>
+
+                    <!-- Hidden CSRF-protected forms submitted by the confirm modal -->
+                    <form method="POST" id="systemRestartForm" action="{{ url_for('system_control', action='restart') }}" class="d-none">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    </form>
+                    <form method="POST" id="systemShutdownForm" action="{{ url_for('system_control', action='shutdown') }}" class="d-none">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    </form>
                 </div>
             </div>
         </div>
@@ -259,7 +285,7 @@ function confirmSystemRestart() {
     confirmBtn.className = 'btn btn-warning';
     confirmBtn.textContent = 'Restart Device';
     confirmBtn.onclick = function() {
-        window.location.href = "{{ url_for('system_control', action='restart') }}";
+        document.getElementById('systemRestartForm').submit();
     };
     
     modal.show();
@@ -274,7 +300,7 @@ function confirmSystemShutdown() {
     confirmBtn.className = 'btn btn-danger';
     confirmBtn.textContent = 'Shutdown Device';
     confirmBtn.onclick = function() {
-        window.location.href = "{{ url_for('system_control', action='shutdown') }}";
+        document.getElementById('systemShutdownForm').submit();
     };
     
     modal.show();

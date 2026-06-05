@@ -27,6 +27,7 @@
                                     <th>Type</th>
                                     <th>Adapter</th>
                                     <th>Sensor</th>
+                                    <th>Remote IP</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -36,20 +37,23 @@
                                 <tr>
                                     <td class="font-monospace">{{ service.name }}</td>
                                     <td>
-                                        {% if service.service_type == 'WiFi' %}
+                                        {% if 'WiFi' in service.service_type %}
                                             <span class="badge bg-info">
                                                 <i data-feather="wifi" class="me-1"></i>
-                                                WiFi + GPS
+                                                {{ service.service_type }}
                                             </span>
-                                        {% elif service.service_type == 'Bluetooth' %}
+                                        {% elif 'Bluetooth' in service.service_type %}
                                             <span class="badge bg-primary">
                                                 <i data-feather="bluetooth" class="me-1"></i>
-                                                Bluetooth
+                                                {{ service.service_type }}
                                             </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ service.service_type }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="font-monospace">{{ service.adapter }}</td>
                                     <td>{{ service.sensor }}</td>
+                                    <td class="font-monospace">{{ service.kismet_ip }}</td>
                                     <td>
                                         {% if service.status == 'active' %}
                                             <span class="badge bg-success">Running</span>
@@ -63,21 +67,46 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
+                                            {% if service.status == 'running' %}
                                             <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
-                                                <input type="hidden" name="service_name" value="{{ service.name }}">
-                                                <input type="hidden" name="action" value="start">
-                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Start">
-                                                    <i data-feather="play"></i>
-                                                </button>
-                                            </form>
-                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="service_name" value="{{ service.name }}">
                                                 <input type="hidden" name="action" value="stop">
                                                 <button type="submit" class="btn btn-sm btn-outline-warning" title="Stop">
                                                     <i data-feather="pause"></i>
                                                 </button>
                                             </form>
+                                            {% else %}
                                             <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="start">
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Start">
+                                                    <i data-feather="play"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            {% if service.enabled %}
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="disable">
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Disable auto-start on boot">
+                                                    <i data-feather="x-circle"></i>
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="service_name" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="enable">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Enable auto-start on boot">
+                                                    <i data-feather="check-circle"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            <form method="POST" action="{{ url_for('control_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="service_name" value="{{ service.name }}">
                                                 <input type="hidden" name="action" value="restart">
                                                 <button type="submit" class="btn btn-sm btn-outline-info" title="Restart">
@@ -85,6 +114,7 @@
                                                 </button>
                                             </form>
                                             <form method="POST" action="{{ url_for('remove_push_service') }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="service_name" value="{{ service.name }}">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove"
                                                         onclick="return confirm('Remove this push service?')">
@@ -113,6 +143,7 @@
                             </div>
                             <div class="card-body">
                                 <form method="POST" action="{{ url_for('create_wifi_push') }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <div class="mb-3">
                                         <label for="wifi_kismet_ip" class="form-label">Remote Kismet Server IP</label>
                                         <input type="text" class="form-control" name="kismet_ip" id="wifi_kismet_ip" 
@@ -175,6 +206,7 @@
                             </div>
                             <div class="card-body">
                                 <form method="POST" action="{{ url_for('create_bluetooth_push') }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <div class="mb-3">
                                         <label for="bt_kismet_ip" class="form-label">Remote Kismet Server IP</label>
                                         <input type="text" class="form-control" name="kismet_ip" id="bt_kismet_ip" 
@@ -189,6 +221,13 @@
                                         <div class="form-text">API key for data push (requires datasource permissions)</div>
                                     </div>
                                     
+                                    <div class="mb-3">
+                                        <label for="bt_gps_api_key" class="form-label">GPS API Key <span class="text-muted">(optional)</span></label>
+                                        <input type="text" class="form-control" name="gps_api_key" id="bt_gps_api_key"
+                                               placeholder="your-gps-api-key">
+                                        <div class="form-text">Optional: API key for GPS data (requires WEBGPS permissions). Leave blank for no GPS.</div>
+                                    </div>
+
                                     <div class="mb-3">
                                         <label for="bt_device" class="form-label">Bluetooth Device</label>
                                         <div class="input-group">

@@ -79,6 +79,15 @@ def start_all_services():
                 logger.info("No push services configured")
                 return
 
+            # Only auto-start services marked enabled; disabled ones are skipped on boot.
+            disabled = [s.name for s in services if not getattr(s, "enabled", True)]
+            if disabled:
+                logger.info("Skipping disabled services: %s", ", ".join(disabled))
+            services = [s for s in services if getattr(s, "enabled", True)]
+            if not services:
+                logger.info("No enabled push services to start")
+                return
+
             # 1) readiness waits
             # gpsd (if needed)
             wait_for_gpsd_if_needed(services)
