@@ -10,6 +10,7 @@ Architecture:
  - Backend: Flask + SQLAlchemy (SQLite by default, configurable), optional ProxyFix, Python logging
  - System Integration: systemd service control; device discovery for Wi-Fi, Bluetooth, SDR
  - Files/Data: reads/writes Kismet configs and logs
+ - Admin CLI: manage.py, installed as the kismet-webui-admin command
 -----------------------------------------------------------------------------
 Installation:
  - Clone the repo (install git first if needed)
@@ -20,7 +21,7 @@ Installation:
  - sudo ./install.sh
 -----------------------------------------------------------------------------
 What install.sh does:
- - Installs OS prerequisites on Bookworm/Debian/Ubuntu (python3, python3-venv, python3-pip, rsync, gpsd, gpsd-clients, python3-gps)
+ - Installs OS prerequisites on Bookworm/Debian/Ubuntu (python3, python3-venv, python3-pip, rsync, gpsd, gpsd-clients, python3-gps, rtl-sdr, rtl-433, iw, wireless-tools, net-tools)
  - Creates a Python virtual environment and installs Python dependencies
  - Deploys the app to /opt/kismet-webui
  - Stores the app secret in /etc/kismet-webui/env (root-only) and keeps it, the database and push services on re-runs
@@ -30,11 +31,23 @@ What install.sh does:
  - Creates systemd services:
  - kismet-webui.service (Gunicorn on port 2502)
  - kismet-push-services.service (push-service supervisor - Pushes kismet data [WiFi & BT] to a remote server)
- - Installs a fork of MetaGPS [enhanced reconnects when service drops in&out] for use with the kismet_cap_linux_wifi
+ - Installs a fork of MetaGPS [enhanced reconnects when service drops in&out] into /opt/metagps; the WiFi and Bluetooth push services use it to send this device's GPS position to the remote server
+-----------------------------------------------------------------------------
+Upgrading:
+ - cd kismet-webui && git pull
+ - sudo ./install.sh
+ - Re-running the installer keeps your accounts, push services, Kismet config and the app secret; it rewrites the venv and the systemd units
 -----------------------------------------------------------------------------
 Access the UI:
  - http://host-or-ip:2502/
  - upon first time visiting the webui you will be prompted to set username and password
+-----------------------------------------------------------------------------
+Remote Push (send this device's WiFi/Bluetooth captures to another Kismet server):
+ - Creates a background service per adapter that runs kismet_cap_linux_wifi or kismet_cap_linux_bluetooth against the remote server on port 2501
+ - Data API Key: a key on the remote server with the 'datasource' role; the sensor name becomes the datasource name there
+ - GPS API Key (optional): a key with the 'WEBGPS' or 'admin' role; MetaGPSD then feeds this device's gpsd position to the remote server as a meta-GPS of the same name, so pushed devices get a location
+ - Services start on boot via kismet-push-services.service; use Enable/Disable on the Remote Push page to control that
+ - There is no edit form: to change an adapter or add a GPS key, remove the service and create it again
 -----------------------------------------------------------------------------
 Forgot password / reset accounts (run on the device):
  - sudo kismet-webui-admin reset-users            removes every account; the web UI shows the setup page again
@@ -67,11 +80,23 @@ Admin
 
 
 -----------------------------------------------------------------------------
+Security notes:
+ - Intended for a trusted LAN: the UI is plain HTTP on port 2502 and the service runs as root so it can manage Kismet, adapters and files
+ - Put it behind a TLS reverse proxy if it must be reachable from untrusted networks
+ - The app secret, which also derives the database encryption key, lives in /etc/kismet-webui/env (mode 600); losing that file makes stored push-service API keys unreadable
+-----------------------------------------------------------------------------
+Development / tests:
+ - Tests live in tests/ and run on Linux only (the app imports root/systemd helpers that do not exist on Windows)
+ - python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-deploy.txt pytest
+ - python -m pytest tests/
+-----------------------------------------------------------------------------
 Uninstall:
  - sudo systemctl disable --now kismet-webui kismet-push-services
  - sudo rm -f /etc/systemd/system/kismet-webui.service /etc/systemd/system/kismet-push-services.service
+ - sudo rm -rf /etc/systemd/system/kismet.service.d /etc/kismet-webui /usr/local/sbin/kismet-webui-admin
  - sudo systemctl daemon-reload
- - sudo rm -rf /opt/kismet-webui
+ - sudo rm -rf /opt/kismet-webui /opt/metagps
+ - Optional: sudo rm -f /etc/modprobe.d/blacklist-rtlsdr.conf (keep it if Kismet's rtl433 source or rtl_433 stays in use)
 -----------------------------------------------------------------------------
 Acknowledgments:
  - Kismet Wireless — core wireless detection platform
