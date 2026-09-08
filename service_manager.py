@@ -274,9 +274,25 @@ class KismetServiceManager:
         except Exception as e:
             self.logger.warning(f"Could not clean up rtl_433: {e}")
     
+    def _prepare_start(self):
+        """Clear what would make 'systemctl start' fail; best effort, never fatal.
+
+        Kismet's packaged unit (KillMode=process) leaves rtl_433 running when
+        Kismet stops. The orphan keeps the SDR dongle and a copy of Kismet's
+        port-3501 listener, so the next Kismet dies at startup, and a burst of
+        such failures trips systemd's start-rate limit, which then refuses
+        every start until it is reset.
+        """
+        self._kill_rtl433()
+        try:
+            self._run_systemctl_command('reset-failed')
+        except Exception as e:
+            self.logger.warning(f"Could not reset failed state: {e}")
+
     def start(self):
         """Start Kismet service."""
         try:
+            self._prepare_start()
             self._run_systemctl_command('start')
             return {'success': True, 'message': 'Kismet service started successfully'}
         except Exception as e:
@@ -299,8 +315,8 @@ class KismetServiceManager:
             except Exception as stop_err:
                 self.logger.warning(f"Ignoring stop error during restart: {stop_err}")
             
-            # Clean up any orphaned rtl_433 processes which can hold the SDR open
-            self._kill_rtl433()
+            # Clean up orphaned rtl_433 processes and any tripped start-rate limit
+            self._prepare_start()
             
             # Small pause to let sockets/devices release
             time.sleep(0.5)

@@ -4,11 +4,31 @@ import re
 import logging
 from typing import List, Dict, Any
 
+# USB vendor/product IDs that librtlsdr recognises (its known_devices table);
+# rtl_test and Kismet's rtl433 helper enumerate exactly these dongles.
+RTLSDR_USB_IDS = {
+    ('0bda', '2832'), ('0bda', '2838'),
+    ('0413', '6680'), ('0413', '6f0f'),
+    ('0458', '707f'),
+    ('0ccd', '00a9'), ('0ccd', '00b3'), ('0ccd', '00b4'), ('0ccd', '00b5'), ('0ccd', '00b7'),
+    ('0ccd', '00b8'), ('0ccd', '00b9'), ('0ccd', '00c0'), ('0ccd', '00c6'), ('0ccd', '00d3'),
+    ('0ccd', '00d7'), ('0ccd', '00e0'),
+    ('1554', '5020'),
+    ('15f4', '0131'), ('15f4', '0133'),
+    ('185b', '0620'), ('185b', '0650'), ('185b', '0680'),
+    ('1b80', 'd393'), ('1b80', 'd394'), ('1b80', 'd395'), ('1b80', 'd397'), ('1b80', 'd398'),
+    ('1b80', 'd39d'), ('1b80', 'd3a4'), ('1b80', 'd3a8'), ('1b80', 'd3af'), ('1b80', 'd3b0'),
+    ('1d19', '1101'), ('1d19', '1102'), ('1d19', '1103'), ('1d19', '1104'),
+    ('1f4d', 'a803'), ('1f4d', 'b803'), ('1f4d', 'c803'), ('1f4d', 'd286'), ('1f4d', 'd803'),
+}
+
+
 class DeviceDetector:
     """Detects available WiFi, Bluetooth, and SDR devices"""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.sysfs_usb = '/sys/bus/usb/devices'
     
     def detect_wifi_interfaces(self) -> List[Dict[str, Any]]:
         """Detect available WiFi interfaces"""
@@ -51,31 +71,54 @@ class DeviceDetector:
         return interfaces
     
     def detect_sdr_devices(self) -> List[Dict[str, Any]]:
-        """Detect available RTL-SDR devices"""
-        devices = []
-        
+        """Detect RTL-SDR dongles from sysfs without opening them.
+
+        Reads the USB descriptors the kernel cached at plug-in time. Opening
+        the device (as rtl_test does) fails while Kismet's rtl_433 owns it and
+        can disturb the capture; sysfs never touches the hardware.
+        """
         try:
-            # Use rtl_test to detect RTL-SDR devices
-            # Note: rtl_test -t may not exit cleanly, so we use a shorter timeout and catch partial output
-            result = subprocess.run(['rtl_test', '-t'], capture_output=True, text=True, timeout=5)
-            # rtl_test outputs device info to STDERR, not STDOUT
-            output_to_parse = result.stderr if result.stderr.strip() else result.stdout
-            devices.extend(self._parse_rtl_test(output_to_parse))
-        except subprocess.TimeoutExpired as e:
-            # rtl_test often doesn't exit cleanly, but we can still parse the output
-            if hasattr(e, 'stdout') and e.stdout:
-                stdout_text = e.stdout.decode('utf-8') if isinstance(e.stdout, bytes) else e.stdout
-                devices.extend(self._parse_rtl_test(stdout_text))
-            elif hasattr(e, 'stderr') and e.stderr:
-                stderr_text = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr
-                devices.extend(self._parse_rtl_test(stderr_text))
-            else:
-                self.logger.warning("rtl_test timed out without capturing output")
-        except FileNotFoundError as e:
+            entries = os.listdir(self.sysfs_usb)
+        except OSError as e:
             self.logger.error(f"SDR device detection error: {e}")
-            # Return empty list if rtl_test is not available
-        
+            return []
+
+        found = []
+        for entry in entries:
+            path = os.path.join(self.sysfs_usb, entry)
+            ids = (self._sysfs_attr(path, 'idVendor').lower(),
+                   self._sysfs_attr(path, 'idProduct').lower())
+            if ids in RTLSDR_USB_IDS:
+                busnum = int(self._sysfs_attr(path, 'busnum') or 0)
+                devnum = int(self._sysfs_attr(path, 'devnum') or 0)
+                found.append((busnum, devnum, path))
+        found.sort()
+
+        devices = []
+        for index, (_, _, path) in enumerate(found):
+            manufacturer = self._sysfs_attr(path, 'manufacturer') or 'Unknown'
+            model = self._sysfs_attr(path, 'product')
+            devices.append({
+                'device': f"rtl433-{index}",
+                'device_id': str(index),
+                'name': f"{manufacturer} {model}".strip(),
+                'type': 'RTL-SDR',
+                'serial': self._sysfs_attr(path, 'serial') or str(index),
+                'manufacturer': manufacturer,
+                'model': model,
+                'status': 'available',
+                'default_frequency': '433920000',
+                'supported_frequencies': ['433920000', '915000000', 'Custom']
+            })
         return devices
+
+    def _sysfs_attr(self, path: str, name: str) -> str:
+        """Read one sysfs attribute file; '' if absent or unreadable."""
+        try:
+            with open(os.path.join(path, name)) as f:
+                return f.read().strip()
+        except OSError:
+            return ''
     
     def _parse_iwconfig(self, output: str) -> List[Dict[str, Any]]:
         """Parse iwconfig output"""

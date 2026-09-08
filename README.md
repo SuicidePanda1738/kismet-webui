@@ -23,6 +23,10 @@ What install.sh does:
  - Installs OS prerequisites on Bookworm/Debian/Ubuntu (python3, python3-venv, python3-pip, rsync, gpsd, gpsd-clients, python3-gps)
  - Creates a Python virtual environment and installs Python dependencies
  - Deploys the app to /opt/kismet-webui
+ - Stores the app secret in /etc/kismet-webui/env (root-only) and keeps it, the database and push services on re-runs
+ - Installs the kismet-webui-admin command for resetting accounts and passwords
+ - Hardens kismet.service with a drop-in (KillMode=control-group, TimeoutStopSec=30, RestartSec=5) so kismet_cap_* helpers and rtl_433 stop together with Kismet
+ - Blacklists the dvb_usb_rtl28xxu kernel driver, which otherwise fights rtl_433 for the RTL-SDR dongle
  - Creates systemd services:
  - kismet-webui.service (Gunicorn on port 2502)
  - kismet-push-services.service (push-service supervisor - Pushes kismet data [WiFi & BT] to a remote server)
@@ -31,6 +35,15 @@ What install.sh does:
 Access the UI:
  - http://host-or-ip:2502/
  - upon first time visiting the webui you will be prompted to set username and password
+-----------------------------------------------------------------------------
+Forgot password / reset accounts (run on the device):
+ - sudo kismet-webui-admin reset-users            removes every account; the web UI shows the setup page again
+ - sudo kismet-webui-admin reset-password <user>  sets a new password for one account
+-----------------------------------------------------------------------------
+Kismet will not start ("Start request repeated too quickly") or the rtl433 source never gets data:
+ - An orphaned rtl_433 from a previous Kismet run is still holding the dongle and Kismet's port 3501
+ - sudo pkill rtl_433; sudo systemctl reset-failed kismet; sudo systemctl start kismet
+ - The dashboard Start/Restart buttons and the kismet.service drop-in written by install.sh do this automatically
 -----------------------------------------------------------------------------
 Dashboard
 <img width="2006" height="1169" alt="dashboard" src="https://github.com/user-attachments/assets/658db454-aad1-40ba-ab80-5c3f2d819fcd" />
