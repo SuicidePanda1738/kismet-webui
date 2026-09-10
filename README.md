@@ -3,7 +3,7 @@ Kismet WebUI
 -----------------------------------------------------------------------------
 Requirements:
  - Kismet installed
- - Note* All testing and development has been done on a PI4 running Raspbian bookworm 
+ - Note* All testing and development has been done on a PI4 running Raspbian bookworm and trixie (Python 3.11 / 3.13)
 -----------------------------------------------------------------------------
 Architecture:
  - Frontend: Flask + Jinja2, Bootstrap 5 (dark mode), Feather Icons, vanilla JS
@@ -21,7 +21,7 @@ Installation:
  - sudo ./install.sh
 -----------------------------------------------------------------------------
 What install.sh does:
- - Installs OS prerequisites on Bookworm/Debian/Ubuntu (python3, python3-venv, python3-pip, rsync, gpsd, gpsd-clients, python3-gps, rtl-sdr, rtl-433, iw, wireless-tools, net-tools)
+ - Installs OS prerequisites on Bookworm/Trixie/Debian/Ubuntu (python3, python3-venv, python3-pip, rsync, gpsd, gpsd-clients, python3-gps, rtl-sdr, rtl-433, iw, wireless-tools, net-tools)
  - Creates a Python virtual environment and installs Python dependencies
  - Deploys the app to /opt/kismet-webui
  - Stores the app secret in /etc/kismet-webui/env (root-only) and keeps it, the database and push services on re-runs
@@ -57,6 +57,10 @@ Kismet will not start ("Start request repeated too quickly") or the rtl433 sourc
  - An orphaned rtl_433 from a previous Kismet run is still holding the dongle and Kismet's port 3501
  - sudo pkill rtl_433; sudo systemctl reset-failed kismet; sudo systemctl start kismet
  - The dashboard Start/Restart buttons and the kismet.service drop-in written by install.sh do this automatically
+-----------------------------------------------------------------------------
+kismet-webui and kismet-push-services fail on Trixie / Python 3.13 with "AssertionError: Class <class 'sqlalchemy.sql.elements.SQLCoreOperations'> directly inherits TypingOnly":
+ - Installs from before September 2026 pinned SQLAlchemy 2.0.23, which does not import on Python 3.13
+ - cd kismet-webui && git pull && sudo ./install.sh reinstalls the venv with dependency versions that support Python 3.13
 -----------------------------------------------------------------------------
 Dashboard
 <img width="2006" height="1169" alt="dashboard" src="https://github.com/user-attachments/assets/658db454-aad1-40ba-ab80-5c3f2d819fcd" />
